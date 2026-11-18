@@ -5,7 +5,7 @@
    is registered first (so Blockbench shows what it is even if a permission is refused), and the file system is asked for once, for that one folder. */
 (function () {
   const DIR = '__JOBS_DIR__';
-  const VERSION = '1.0.0';
+  const VERSION = '1.0.1';
   let timer = null;
 
   BBPlugin.register('pc_bridge', {
@@ -52,7 +52,11 @@
             const job = JSON.parse(fs.readFileSync(file, 'utf8'));
 
             fs.unlinkSync(file);
-            result = await (0, eval)(job.script)(job.data);
+            /* A job that never finishes (Blockbench waiting for an answer to a question) must not stop the ones after it. */
+            result = await Promise.race([
+              (0, eval)(job.script)(job.data),
+              new Promise(resolve => setTimeout(() => resolve('Blockbench took too long. It may be waiting for an answer to a question.'), 115000))
+            ]);
           } catch (e) {
             result = 'Blockbench reported: ' + ((e && e.message) || e);
           }

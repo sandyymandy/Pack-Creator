@@ -23,13 +23,17 @@ const TOOLKIT_ICON: &[u8] = include_bytes!("../resources/strut_icon.png");
 const BRIDGE: &[u8] = include_bytes!("../resources/pc_bridge.js");
 const BUNDLED_TAG: &str = "bundled";
 /// The version `pc_bridge.js` says it is; a Blockbench that holds an older one (or one that never registered) gets it installed again.
-const BRIDGE_VERSION: &str = "1.0.0";
+const BRIDGE_VERSION: &str = "1.0.1";
 /// Where the plugin's releases are.
 const PLUGIN_REPO: &str = "sandyysandy/Strut-BlockBench-Plugin";
 /// How long a look at the releases is trusted, in seconds.
 const CHECK_EVERY: u64 = 3600;
 const MIN_VERSION: (u32, u32) = (5, 1);
 const NO_WINDOW: u32 = 0x0800_0000;
+/// What is said when Blockbench does not answer in time.
+const STUCK: &str = "Blockbench did not answer. Look at it: it may be showing a question (a plugin asking for permission, or a message) that has to be answered first.";
+/// How long a job may take in Blockbench, and how long it takes to start.
+const JOB_SECONDS: u64 = 120;
 
 /* What the installer is doing: "" when idle, then a sentence for the page to show. Kept here so the page can ask again and again while a download runs. */
 static INSTALL: Mutex<String> = Mutex::new(String::new());
@@ -228,6 +232,9 @@ fn pages() -> Option<Vec<Value>> {
 struct Page {
     socket: tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>,
     next: u64,
+    /// How long an answer is waited for. Blockbench stops answering while it shows a question of its own (a plugin asking for permission, say), and without a limit the Pack
+    /// Creator would wait for that for ever.
+    limit: Duration,
 }
 
 impl Page {
@@ -235,18 +242,27 @@ impl Page {
         self.next += 1;
 
         let id = self.next;
+        let deadline = Instant::now() + self.limit;
 
         self.socket.send(tungstenite::Message::text(json!({ "id": id, "method": method, "params": params }).to_string())).map_err(|e| format!("Blockbench did not take the request: {e}"))?;
 
         loop {
-            let message = self.socket.read().map_err(|e| format!("Blockbench stopped answering: {e}"))?;
+            match self.socket.read() {
+                Ok(tungstenite::Message::Text(text)) => {
+                    let value: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
 
-            if let tungstenite::Message::Text(text) = message {
-                let value: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-
-                if value["id"].as_u64() == Some(id) {
-                    return Ok(value);
+                    if value["id"].as_u64() == Some(id) {
+                        return Ok(value);
+                    }
                 }
+                Ok(_) => {}
+                /* The read gives up every second so the limit can be checked. */
+                Err(tungstenite::Error::Io(e)) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+                Err(e) => return Err(format!("Blockbench stopped answering: {e}")),
+            }
+
+            if Instant::now() > deadline {
+                return Err(STUCK.into());
             }
         }
     }
@@ -269,9 +285,13 @@ fn connect() -> Result<Page, String> {
     let list = pages().ok_or("Blockbench is not running")?;
     let page = list.iter().find(|p| p["type"] == "page" && p["url"].as_str().map_or(false, |u| u.contains("index.html"))).ok_or("Blockbench has no window yet")?;
     let address = page["webSocketDebuggerUrl"].as_str().ok_or("Blockbench gave no address to talk to")?;
-    let (socket, _) = tungstenite::connect(address).map_err(|e| format!("could not connect to Blockbench: {e}"))?;
+    let (mut socket, _) = tungstenite::connect(address).map_err(|e| format!("could not connect to Blockbench: {e}"))?;
 
-    Ok(Page { socket, next: 0 })
+    if let tungstenite::stream::MaybeTlsStream::Plain(stream) = socket.get_mut() {
+        stream.set_read_timeout(Some(Duration::from_secs(1))).ok();
+    }
+
+    Ok(Page { socket, next: 0, limit: Duration::from_secs(10) })
 }
 
 /// Whether any Blockbench is running (with or without a way to reach it).
@@ -338,6 +358,9 @@ fn reach() -> Result<Route, String> {
 fn deliver(route: Route, script: &str, data: &Value) -> Result<String, String> {
     match route {
         Route::Port(mut page) => {
+            /* The job itself may take a while (a model is read in, a plugin installed), and asks for a longer wait than the questions that find out whether Blockbench is ready. */
+            page.limit = Duration::from_secs(JOB_SECONDS);
+
             let reply = page.run(&format!("({script})({data})"))?;
 
             let _ = page.call("Page.bringToFront", json!({}));
@@ -362,9 +385,9 @@ fn deliver(route: Route, script: &str, data: &Value) -> Result<String, String> {
                     return Ok(text);
                 }
 
-                if started.elapsed() > Duration::from_secs(90) {
+                if started.elapsed() > Duration::from_secs(JOB_SECONDS + 10) {
                     let _ = std::fs::remove_file(dir.join(format!("{id}.job")));
-                    return Err("Blockbench did not answer. Is a dialog open in it?".into());
+                    return Err(STUCK.into());
                 }
 
                 std::thread::sleep(Duration::from_millis(200));
