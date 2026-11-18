@@ -382,6 +382,12 @@ fn installed_tag() -> String {
     std::fs::read_to_string(plugin_dir().join("version.txt")).map(|t| t.trim().to_string()).ok().filter(|t| !t.is_empty()).unwrap_or_else(|| BUNDLED_TAG.to_string())
 }
 
+/// What identifies the files in the plugin folder: the release and when its archive was uploaded (so an archive that is uploaded again under the same tag is taken too). The
+/// plugin files that came before this was kept have none, and are replaced by the first release looked at.
+fn installed_marker() -> String {
+    std::fs::read_to_string(plugin_dir().join("release.txt")).map(|t| t.trim().to_string()).ok().filter(|t| !t.is_empty()).unwrap_or_else(|| BUNDLED_TAG.to_string())
+}
+
 fn write_if_different(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if std::fs::read(path).map(|existing| existing == bytes).unwrap_or(false) {
         return Ok(());
@@ -417,21 +423,21 @@ fn plugin_files() -> Result<(PathBuf, PathBuf), String> {
     Ok((toolkit, bridge))
 }
 
-/// The newest release: its tag, and the address of the archive (`.rar`) it carries the plugin in.
-fn latest_release() -> Result<(String, String), String> {
+/// The newest release: its tag, the address of the archive (`.rar`) it carries the plugin in, and when that archive was last uploaded.
+fn latest_release() -> Result<(String, String, String), String> {
     let body = curl(&["-sSL", "--max-time", "15", "-H", "User-Agent: pleasure-horizons-pack-creator", &format!("https://api.github.com/repos/{PLUGIN_REPO}/releases/latest")])?;
     let release: Value = serde_json::from_slice(&body).map_err(|_| "GitHub did not answer with the release".to_string())?;
     let tag = release["tag_name"].as_str().map(str::to_string).ok_or_else(|| "the plugin has no release yet".to_string())?;
     let assets = release["assets"].as_array().cloned().unwrap_or_default();
-    let archive = assets
+    let asset = assets
         .iter()
         .find(|a| a["name"].as_str() == Some("strut_toolkit.rar"))
         .or_else(|| assets.iter().find(|a| a["name"].as_str().map_or(false, |n| n.to_lowercase().ends_with(".rar"))))
-        .and_then(|a| a["browser_download_url"].as_str())
-        .ok_or_else(|| format!("the release {tag} has no .rar file with the plugin in it"))?
-        .to_string();
+        .ok_or_else(|| format!("the release {tag} has no .rar file with the plugin in it"))?;
+    let archive = asset["browser_download_url"].as_str().ok_or_else(|| format!("the release {tag} gave no address for its .rar file"))?.to_string();
+    let uploaded = asset["updated_at"].as_str().unwrap_or("").to_string();
 
-    Ok((tag, archive))
+    Ok((tag, archive, uploaded))
 }
 
 /// A folder in the temp folder that is removed when it goes out of scope, whatever happened in between.
@@ -462,11 +468,12 @@ pub fn refresh_plugin(force: bool) -> Result<String, String> {
         return Ok(installed_tag());
     }
 
-    let (tag, archive) = latest_release()?;
+    let (tag, archive, uploaded) = latest_release()?;
+    let marker = format!("{tag}|{uploaded}");
 
     std::fs::write(&stamp, &tag).ok();
 
-    if tag == installed_tag() {
+    if marker == installed_marker() {
         return Ok(tag);
     }
 
@@ -500,6 +507,7 @@ pub fn refresh_plugin(force: bool) -> Result<String, String> {
     }
 
     std::fs::write(folder.join("version.txt"), &tag).map_err(|e| format!("could not write the version: {e}"))?;
+    std::fs::write(folder.join("release.txt"), &marker).map_err(|e| format!("could not write the version: {e}"))?;
 
     /* The archive and what was unpacked are removed as `scratch` goes out of scope here. */
     Ok(tag)
@@ -623,7 +631,7 @@ fn plugin_data() -> Result<Value, String> {
     Ok(json!({
         "toolkit": toolkit.display().to_string().replace('\\', "/"),
         "bridge": bridge.display().to_string().replace('\\', "/"),
-        "tag": installed_tag(),
+        "tag": installed_marker(),
         "bridgeVersion": BRIDGE_VERSION,
     }))
 }
@@ -658,9 +666,10 @@ pub fn prepare() -> Result<(), String> {
 /// Looks for a newer release of the plugin now (the button in the Blockbench window), and says what happened.
 pub fn update_plugin() -> Result<String, String> {
     let before = installed_tag();
+    let before_marker = installed_marker();
     let after = refresh_plugin(true)?;
 
-    Ok(if before == after { format!("The Strut Toolkit {after} is the newest release.") } else { format!("The Strut Toolkit was updated from {before} to {after}. It is installed in Blockbench the next time a model is opened.") })
+    Ok(if before_marker == installed_marker() { format!("The Strut Toolkit {after} is the newest release.") } else { if before == after { format!("The Strut Toolkit {after} was downloaded again, because its file on GitHub is not the one that was here. It is installed in Blockbench the next time a model is opened.") } else { format!("The Strut Toolkit was updated from {before} to {after}. It is installed in Blockbench the next time a model is opened.") } })
 }
 
 #[cfg(test)]
