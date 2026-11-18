@@ -1639,7 +1639,7 @@ fn clear_stale_unpacked() {
 
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
-        let Some(rest) = name.strip_prefix("ph-oldpack-").or_else(|| name.strip_prefix("ph-fapcraft-")) else { continue };
+        let Some(rest) = name.strip_prefix("ph-oldpack-").or_else(|| name.strip_prefix("ph-fapcraft-")).or_else(|| name.strip_prefix("ph-toolkit-")) else { continue };
 
         /* Not this run's, and not touched for ten minutes (another window of the program may still be using it). */
         let old_enough = entry.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map_or(false, |age| age.as_secs() > 600);
