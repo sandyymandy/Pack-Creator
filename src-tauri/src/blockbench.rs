@@ -22,6 +22,8 @@ const TOOLKIT: &[u8] = include_bytes!("../resources/strut_toolkit.js");
 const TOOLKIT_ICON: &[u8] = include_bytes!("../resources/strut_icon.png");
 const BRIDGE: &[u8] = include_bytes!("../resources/pc_bridge.js");
 const BUNDLED_TAG: &str = "bundled";
+/// The version `pc_bridge.js` says it is; a Blockbench that holds an older one (or one that never registered) gets it installed again.
+const BRIDGE_VERSION: &str = "1.0.0";
 /// Where the plugin's releases are.
 const PLUGIN_REPO: &str = "sandyysandy/Strut-BlockBench-Plugin";
 /// The files of the plugin that sit next to each other in the repository: Blockbench finds the icon and the notes beside the script.
@@ -409,8 +411,10 @@ fn plugin_files() -> Result<(PathBuf, PathBuf), String> {
 
     /* The bridge is ours, so it is kept as the Pack Creator has it. */
     let bridge = folder.join("pc_bridge.js");
+    let jobs = jobs_dir().display().to_string().replace('\\', "/").replace('\'', "\\'");
 
-    write_if_different(&bridge, BRIDGE)?;
+    /* Blockbench gives a plugin no way to find this folder itself, so it is written into the file. */
+    write_if_different(&bridge, String::from_utf8_lossy(BRIDGE).replace("__JOBS_DIR__", &jobs).as_bytes())?;
 
     Ok((toolkit, bridge))
 }
@@ -491,12 +495,15 @@ const SCRIPT: &str = r#"(async (job) => {
 
   if (!have || seen !== job.tag) {
     if (have) { try { await have.uninstall(); } catch (e) { /* replaced below anyway */ } }
-    await new Plugin().loadFromFile({ path: job.toolkit }, true);
+    await new Plugin().loadFromFile({ path: job.toolkit }, false);
     try { localStorage.setItem('pc_strut_tag', job.tag); } catch (e) { /* no storage */ }
   }
 
-  if (!Plugins.installed.some(p => p.id === 'pc_bridge')) {
-    try { await new Plugin().loadFromFile({ path: job.bridge }, true); } catch (e) { /* the bridge is only a convenience */ }
+  const link = Plugins.all.find(p => p.id === 'pc_bridge');
+
+  if (!link || !link.installed || link.version !== job.bridgeVersion) {
+    if (link) { try { await link.uninstall(); } catch (e) { /* replaced below anyway */ } }
+    try { await new Plugin().loadFromFile({ path: job.bridge }, false); } catch (e) { /* the link is only a convenience */ }
   }
 
   for (let i = 0; i < 50 && !(BarItems.import_strut_binary_model && BarItems.export_strut_binary_model); i++) await wait(200);
@@ -584,6 +591,7 @@ fn plugin_data() -> Result<Value, String> {
         "toolkit": toolkit.display().to_string().replace('\\', "/"),
         "bridge": bridge.display().to_string().replace('\\', "/"),
         "tag": installed_tag(),
+        "bridgeVersion": BRIDGE_VERSION,
     }))
 }
 
