@@ -1,5 +1,5 @@
 //! Blockbench, the editor for models, animations and textures. The Pack Creator finds it, installs it when it is missing, keeps the Strut Toolkit plugin up to date from its
-//! GitHub releases (the release's archive is unpacked, the script and icon are kept, the rest is removed), and opens a girl's model with her texture, or an animation on a model, ready to edit. It uses the person's own Blockbench, with their own plugins.
+//! GitHub releases, and opens a girl's model with her texture, or an animation on a model, ready to edit. It uses the person's own Blockbench, with their own plugins.
 //!
 //! A Blockbench that is already open is reached through a small plugin of ours (`pc_bridge.js`) that picks up job files from a folder. A Blockbench that is not open is
 //! started with a debugging port, and the page inside it is driven over that port: the toolkit and the bridge are installed, the file is handed to the toolkit as if it had
@@ -26,6 +26,8 @@ const BUNDLED_TAG: &str = "bundled";
 const BRIDGE_VERSION: &str = "1.0.0";
 /// Where the plugin's releases are.
 const PLUGIN_REPO: &str = "sandyysandy/Strut-BlockBench-Plugin";
+/// The files of the plugin that sit next to each other in the repository: Blockbench finds the icon and the notes beside the script.
+const PLUGIN_FILES: [&str; 4] = ["strut_toolkit.js", "icon.png", "about.md", "changelog.json"];
 /// How long a look at the releases is trusted, in seconds.
 const CHECK_EVERY: u64 = 3600;
 const MIN_VERSION: (u32, u32) = (5, 1);
@@ -417,40 +419,16 @@ fn plugin_files() -> Result<(PathBuf, PathBuf), String> {
     Ok((toolkit, bridge))
 }
 
-/// The newest release: its tag, and the address of the archive (`.rar`) it carries the plugin in.
-fn latest_release() -> Result<(String, String), String> {
+/// The newest release's tag, from GitHub.
+fn latest_tag() -> Result<String, String> {
     let body = curl(&["-sSL", "--max-time", "15", "-H", "User-Agent: pleasure-horizons-pack-creator", &format!("https://api.github.com/repos/{PLUGIN_REPO}/releases/latest")])?;
     let release: Value = serde_json::from_slice(&body).map_err(|_| "GitHub did not answer with the release".to_string())?;
-    let tag = release["tag_name"].as_str().map(str::to_string).ok_or_else(|| "the plugin has no release yet".to_string())?;
-    let assets = release["assets"].as_array().cloned().unwrap_or_default();
-    let archive = assets
-        .iter()
-        .find(|a| a["name"].as_str() == Some("strut_toolkit.rar"))
-        .or_else(|| assets.iter().find(|a| a["name"].as_str().map_or(false, |n| n.to_lowercase().ends_with(".rar"))))
-        .and_then(|a| a["browser_download_url"].as_str())
-        .ok_or_else(|| format!("the release {tag} has no .rar file with the plugin in it"))?
-        .to_string();
 
-    Ok((tag, archive))
+    release["tag_name"].as_str().map(str::to_string).ok_or_else(|| "the plugin has no release yet".to_string())
 }
 
-/// A folder in the temp folder that is removed when it goes out of scope, whatever happened in between.
-struct Scratch(PathBuf);
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-/// Where Windows keeps its own `tar`, which also opens `.rar` files.
-fn windows_tar() -> PathBuf {
-    PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into())).join("System32").join("tar.exe")
-}
-
-/// Looks for a newer release of the plugin and installs it into the plugin folder. The release's `.rar` is downloaded and unpacked in a temporary folder, the script and the
-/// icon are taken out of it, and everything else (and the archive) is removed again. Blockbench takes the new plugin up the next time a job is sent (the old one is
-/// uninstalled and the new one installed). With `force` it looks now; otherwise at most once an hour, and a failure (no network) keeps what there is. Returns the release now in use.
+/// Looks for a newer release of the plugin and downloads it into the plugin folder. Blockbench takes it up the next time a job is sent (the old one is uninstalled and the new
+/// one installed). With `force` it looks now; otherwise at most once an hour, and a failure (no network) keeps what there is. Returns the release now in use.
 pub fn refresh_plugin(force: bool) -> Result<String, String> {
     plugin_files()?;
 
@@ -462,7 +440,7 @@ pub fn refresh_plugin(force: bool) -> Result<String, String> {
         return Ok(installed_tag());
     }
 
-    let (tag, archive) = latest_release()?;
+    let tag = latest_tag()?;
 
     std::fs::write(&stamp, &tag).ok();
 
@@ -470,38 +448,27 @@ pub fn refresh_plugin(force: bool) -> Result<String, String> {
         return Ok(tag);
     }
 
-    let scratch = Scratch(std::env::temp_dir().join(format!("ph-toolkit-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0))));
-    let unpacked = scratch.0.join("unpacked");
-    let file = scratch.0.join("strut_toolkit.rar");
+    /* Everything is fetched before anything is replaced, so a failed download leaves the working plugin as it was. */
+    let mut fetched: Vec<(&str, Vec<u8>)> = Vec::new();
 
-    std::fs::create_dir_all(&unpacked).map_err(|e| format!("could not make a folder to unpack the plugin in: {e}"))?;
-    curl(&["-sSL", "-f", "--max-time", "1800", "-o", &file.display().to_string(), &archive]).map_err(|e| format!("could not download the plugin {tag}: {e}"))?;
+    for name in PLUGIN_FILES {
+        let url = format!("https://raw.githubusercontent.com/{PLUGIN_REPO}/{tag}/strut_toolkit/{name}");
 
-    let tar = Command::new(windows_tar()).arg("-xf").arg(&file).arg("-C").arg(&unpacked).creation_flags(NO_WINDOW).output().map_err(|e| format!("Windows' own unpacker (tar) could not run: {e}"))?;
-
-    if !tar.status.success() {
-        return Err(format!("the plugin {tag} could not be unpacked: {}", String::from_utf8_lossy(&tar.stderr).trim()));
+        match curl(&["-sSL", "-f", "--max-time", "120", &url]) {
+            Ok(bytes) if !bytes.is_empty() => fetched.push((name, bytes)),
+            /* The script is needed; the icon and the notes are only nice to have. */
+            Err(error) if name == "strut_toolkit.js" => return Err(format!("could not download the plugin {tag}: {error}")),
+            _ if name == "strut_toolkit.js" => return Err(format!("the plugin {tag} came back empty")),
+            _ => {}
+        }
     }
 
-    /* The archive may keep the files in a folder; the script and the icon are found wherever they are. */
-    let found = |name: &str| pc_core::check::walk(&unpacked).into_iter().find(|rel| rel.rsplit('/').next().map_or(false, |n| n.eq_ignore_ascii_case(name))).map(|rel| unpacked.join(rel));
-    let script = found("strut_toolkit.js").ok_or_else(|| format!("the plugin {tag} has no strut_toolkit.js in it"))?;
-    let bytes = std::fs::read(&script).map_err(|e| format!("could not read the unpacked plugin: {e}"))?;
-
-    if bytes.len() < 1000 {
-        return Err(format!("the plugin {tag} came back empty"));
-    }
-
-    /* Only these two are kept, and only now that the unpacking worked: a failure leaves the working plugin as it was. */
-    std::fs::write(folder.join("strut_toolkit.js"), bytes).map_err(|e| format!("could not write the plugin: {e}"))?;
-
-    if let Some(icon) = found("icon.png") {
-        std::fs::copy(icon, folder.join("icon.png")).map_err(|e| format!("could not write the icon: {e}"))?;
+    for (name, bytes) in fetched {
+        std::fs::write(folder.join(name), bytes).map_err(|e| format!("could not write {name}: {e}"))?;
     }
 
     std::fs::write(folder.join("version.txt"), &tag).map_err(|e| format!("could not write the version: {e}"))?;
 
-    /* The archive and what was unpacked are removed as `scratch` goes out of scope here. */
     Ok(tag)
 }
 
