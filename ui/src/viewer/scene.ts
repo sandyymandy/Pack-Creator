@@ -100,47 +100,112 @@ export type Smoothing = 'authored' | 'smooth' | 'flat';
  * The normals of a mesh, one for each corner in the order the geometry lists them. Smooth: the faces that share a vertex (by its index, not its place in the UV
  * layout) are averaged there, each weighted by its size. Flat: each face keeps its own.
  */
-function meshNormals(mesh: ModelData['meshes'][number], positions: ArrayLike<number>, smooth: boolean): Float32Array {
+/** What a mesh's normals are worked out from, which does not change while it is posed: the vertex of each corner and the triangles made of corners. Kept so that a skinned
+ *  mesh, whose normals are worked out again every frame, allocates nothing. */
+interface NormalPlan {
+  corners: Int32Array;
+  triangles: Int32Array;
+  vertices: number;
+  sums: Float32Array;
+}
+
+const normalPlans = new WeakMap<object, NormalPlan>();
+
+function normalPlanOf(mesh: ModelData['meshes'][number]): NormalPlan {
+  let plan = normalPlans.get(mesh);
+
+  if (plan) return plan;
+
   const corners: number[] = [];
-  const triangles: [number, number, number][] = [];
+  const triangles: number[] = [];
+  let vertices = 0;
 
   for (const face of mesh.faces) {
     const first = corners.length;
 
-    face.vertices.forEach(v => corners.push(v));
+    for (const v of face.vertices) {
+      corners.push(v);
+      if (v + 1 > vertices) vertices = v + 1;
+    }
 
-    for (let i = 1; i < face.vertices.length - 1; i++) triangles.push([first, first + i, first + i + 1]);
+    for (let i = 1; i < face.vertices.length - 1; i++) triangles.push(first, first + i, first + i + 1);
   }
 
-  const point = (corner: number): THREE.Vector3 => {
-    const v = corners[corner];
+  plan = { corners: Int32Array.from(corners), triangles: Int32Array.from(triangles), vertices, sums: new Float32Array(vertices * 3) };
+  normalPlans.set(mesh, plan);
 
-    return new THREE.Vector3(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]);
-  };
-  const perFace = new Map<number, THREE.Vector3>();
-  const perVertex = new Map<number, THREE.Vector3>();
-  const out = new Float32Array(corners.length * 3);
+  return plan;
+}
 
-  for (const [a, b, c] of triangles) {
-    const pa = point(a);
-    const normal = new THREE.Vector3().subVectors(point(b), pa).cross(new THREE.Vector3().subVectors(point(c), pa));
+/**
+ * The normals of a mesh, one for each corner in the order the geometry lists them. Smooth: the faces that share a vertex (by its index, not its place in the UV
+ * map) share one normal, as the game blends them. Flat: each corner takes the normal of its face. Written into `out` (made when it is not given).
+ */
+function meshNormals(mesh: ModelData['meshes'][number], positions: ArrayLike<number>, smooth: boolean, out?: Float32Array): Float32Array {
+  const plan = normalPlanOf(mesh);
+  const { corners, triangles, sums } = plan;
+  const result = out && out.length === corners.length * 3 ? out : new Float32Array(corners.length * 3);
 
-    for (const corner of [a, b, c]) {
-      perFace.set(corner, normal);
+  if (smooth) sums.fill(0);
+  else result.fill(0);
 
-      const vertex = corners[corner];
+  for (let t = 0; t < triangles.length; t += 3) {
+    const a = corners[triangles[t]] * 3;
+    const b = corners[triangles[t + 1]] * 3;
+    const c = corners[triangles[t + 2]] * 3;
+    const ux = positions[b] - positions[a];
+    const uy = positions[b + 1] - positions[a + 1];
+    const uz = positions[b + 2] - positions[a + 2];
+    const vx = positions[c] - positions[a];
+    const vy = positions[c + 1] - positions[a + 1];
+    const vz = positions[c + 2] - positions[a + 2];
+    const nx = uy * vz - uz * vy;
+    const ny = uz * vx - ux * vz;
+    const nz = ux * vy - uy * vx;
 
-      perVertex.set(vertex, (perVertex.get(vertex) ?? new THREE.Vector3()).add(normal));
+    if (smooth) {
+      for (const at of [a, b, c]) {
+        sums[at] += nx;
+        sums[at + 1] += ny;
+        sums[at + 2] += nz;
+      }
+    } else {
+      for (let k = 0; k < 3; k++) {
+        const o = triangles[t + k] * 3;
+
+        result[o] = nx;
+        result[o + 1] = ny;
+        result[o + 2] = nz;
+      }
     }
   }
 
   for (let corner = 0; corner < corners.length; corner++) {
-    const normal = (smooth ? perVertex.get(corners[corner]) : perFace.get(corner))?.clone().normalize() ?? new THREE.Vector3(0, 1, 0);
+    const o = corner * 3;
+    let x: number;
+    let y: number;
+    let z: number;
 
-    out.set([normal.x, normal.y, normal.z], corner * 3);
+    if (smooth) {
+      const v = corners[corner] * 3;
+
+      x = sums[v];
+      y = sums[v + 1];
+      z = sums[v + 2];
+    } else {
+      x = result[o];
+      y = result[o + 1];
+      z = result[o + 2];
+    }
+
+    const length = Math.hypot(x, y, z) || 1;
+
+    result[o] = x / length;
+    result[o + 1] = y / length;
+    result[o + 2] = z / length;
   }
 
-  return out;
+  return result;
 }
 
 function buildCube(cube: ModelData['cubes'][number], texture: ModelTexture, unit: number): THREE.BufferGeometry {
@@ -287,7 +352,18 @@ function sample(keys: KeyData[], time: number, fallback: [number, number, number
   if (keys.length === 0) return fallback;
   if (time <= keys[0].time) return valueOf(keys[0].value, time);
 
-  for (let i = 1; i < keys.length; i++) {
+  /* The first key at or after this moment, found by halving (a long clip has many keys, and every bone is sampled every frame). */
+  let low = 1;
+  let high = keys.length;
+
+  while (low < high) {
+    const middle = (low + high) >> 1;
+
+    if (time <= keys[middle].time) high = middle;
+    else low = middle + 1;
+  }
+
+  for (let i = low; i < keys.length; i++) {
     if (time <= keys[i].time) {
       const a = keys[i - 1];
       const b = keys[i];
@@ -544,7 +620,15 @@ export function createViewer(container: HTMLElement): Viewer {
   function refreshNormals(mesh: FreeMesh): void {
     const smooth = smoothing === 'smooth' || (smoothing === 'authored' && mesh.data.smooth);
 
-    mesh.piece.geometry.setAttribute('normal', new THREE.BufferAttribute(meshNormals(mesh.data, mesh.positions, smooth), 3));
+    const existing = mesh.piece.geometry.getAttribute('normal') as THREE.BufferAttribute | undefined;
+
+    /* The buffer is written in place when it is there already: made anew every frame, a posed model spends its time on the allocations. */
+    if (existing && existing.count === mesh.corners.length) {
+      meshNormals(mesh.data, mesh.positions, smooth, existing.array as Float32Array);
+      existing.needsUpdate = true;
+    } else {
+      mesh.piece.geometry.setAttribute('normal', new THREE.BufferAttribute(meshNormals(mesh.data, mesh.positions, smooth), 3));
+    }
   }
 
   function applySmoothing(): void {
@@ -688,6 +772,8 @@ export function createViewer(container: HTMLElement): Viewer {
     heardUntil = until;
   }
 
+  let lastTick = 0;
+
   function frame(): void {
     if (disposed) return;
 
@@ -721,7 +807,11 @@ export function createViewer(container: HTMLElement): Viewer {
 
       hear(time);
       pose();
-      tick?.(time, playing);
+      /* The page around the view (the time bar) is told about 15 times a second, not on every frame: redrawing it each frame costs more than the animation does. */
+      if (ended || now - lastTick > 66) {
+        lastTick = now;
+        tick?.(time, playing);
+      }
 
       if (ended) endListener?.();
     }

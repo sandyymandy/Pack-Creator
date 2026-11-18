@@ -1103,6 +1103,12 @@ async fn prepare_blockbench() -> Reply<()> {
     tauri::async_runtime::spawn_blocking(blockbench::prepare).await.map_err(text)?
 }
 
+/// Looks for a newer release of the Strut Toolkit on GitHub and downloads it.
+#[tauri::command]
+async fn update_toolkit() -> Reply<String> {
+    tauri::async_runtime::spawn_blocking(blockbench::update_plugin).await.map_err(text)?
+}
+
 /// Opens a model (with the texture, and an animation file on it when one is given) in Blockbench. The files are named relative to the project.
 #[tauri::command]
 async fn open_in_blockbench(app: State<'_, App>, model: String, texture: Option<String>, animation: Option<String>) -> Reply<()> {
@@ -1595,6 +1601,7 @@ fn main() {
             read_game_log,
             install_blockbench,
             prepare_blockbench,
+            update_toolkit,
             open_in_blockbench,
             cue_names,
             old_pack_girls,

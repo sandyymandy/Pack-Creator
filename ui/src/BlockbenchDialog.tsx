@@ -6,7 +6,8 @@ import type { BlockbenchStatus } from './types';
 
 /**
  * Blockbench, the editor the models, animations and textures are made in. It shows whether it is installed (version 5.1 or newer is needed for the Strut Toolkit),
- * downloads and starts its installer, and starts it with the toolkit ready. The Pack Creator keeps a profile of its own for it, so the person's usual Blockbench is not touched.
+ * downloads and starts its installer, and starts it with the toolkit ready. It is the person's own Blockbench, with their own plugins; the Strut Toolkit is installed in it
+ * and kept up to date from its GitHub releases, and a Blockbench that is already open is used as it is.
  */
 export function BlockbenchDialog({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<BlockbenchStatus | null>(null);
@@ -45,6 +46,19 @@ export function BlockbenchDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const checkUpdate = async () => {
+    setBusy(true);
+
+    try {
+      notify(await api.updateToolkit(), true);
+    } catch (error) {
+      notify(messageOf(error));
+    } finally {
+      setBusy(false);
+      refresh();
+    }
+  };
+
   const installing = status?.installing ?? '';
   const failed = installing.startsWith('failed');
   const ready = !!status?.exe && status.versionOk;
@@ -62,8 +76,9 @@ export function BlockbenchDialog({ onClose }: { onClose: () => void }) {
           </div>
 
           <div class="muted">
-            Strut Toolkit {status.toolkitVersion} comes with the Pack Creator and is loaded into a Blockbench profile of its own the first time a model is opened, so your usual Blockbench is left as it is.
-            It adds the Strut model and animation formats, and a <b>Save to pack</b> command in the File menu that writes the model straight back into the pack.
+            Strut Toolkit {status.toolkitVersion === 'bundled' ? '(the copy that comes with the Pack Creator)' : status.toolkitVersion} is installed into your own Blockbench the first time a model is opened, and a newer release from
+            GitHub (github.com/sandyysandy/Strut-BlockBench-Plugin) replaces the old one by itself. It adds the Strut model and animation formats, and a <b>Save to pack</b> command in the File menu that writes the model straight back into the pack.
+            {status.linked ? <> Blockbench is open and linked: models open in it as it is.</> : status.running ? <> Blockbench is open but not linked yet: close it once, and the Pack Creator will open it and link itself.</> : null}
           </div>
 
           {installing && <div class={failed ? 'form-note' : 'chip'} style={failed ? '' : 'align-self:flex-start'}>{installing}</div>}
@@ -71,6 +86,7 @@ export function BlockbenchDialog({ onClose }: { onClose: () => void }) {
           <div class="foot" style="margin-top:6px">
             <button class="btn ghost" onClick={onClose}>Close</button>
             {!ready && <button class="btn primary" disabled={!!installing && !failed} onClick={() => void install()} title="Downloads Blockbench's own installer from github.com/JannisX11/blockbench (about 110 MiB) and runs it">{status.exe ? 'Install the newest Blockbench' : 'Install Blockbench'}</button>}
+            {ready && <button class="btn" disabled={busy} onClick={() => void checkUpdate()} title="Looks for a newer Strut Toolkit on GitHub and replaces the old one">Check for a toolkit update</button>}
             {ready && <button class="btn primary" disabled={busy} onClick={() => void prepare()}>{busy ? 'Starting...' : status.running ? 'Show Blockbench' : 'Open Blockbench with the toolkit'}</button>}
           </div>
         </div>

@@ -278,6 +278,8 @@ export interface BlockbenchStatus {
   running: boolean;
   toolkitVersion: string;
   installing: string;
+  /** Whether a Blockbench that is open can be reached without restarting it. */
+  linked: boolean;
 }
 
 export interface ViewerFiles {

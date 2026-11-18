@@ -90,6 +90,7 @@ export const api = {
   blockbenchStatus: () => call<BlockbenchStatus>('blockbench_status'),
   installBlockbench: () => call<void>('install_blockbench'),
   prepareBlockbench: () => call<void>('prepare_blockbench'),
+  updateToolkit: () => call<string>('update_toolkit'),
   openInBlockbench: (model: string, texture: string | null, animation: string | null) => call<void>('open_in_blockbench', { model, texture, animation }),
   importProfile: (path: string, bodyType: string) => call<ImportResult>('import_profile', { path, bodyType }),
   schemaFor: (rel: string) => call<object | null>('schema_for', { rel })
