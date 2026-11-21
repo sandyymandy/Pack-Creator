@@ -726,6 +726,8 @@ struct SimFiles {
     texture: Option<String>,
     /// The animation files she plays a scene from, in the game's lookup order (hers for the scene, the shared one, her base file, the shared base).
     animations: Vec<String>,
+    /// Her event bindings in layers, the skeleton's first and hers after (hers win): empty for a girl whose bindings are one file.
+    binding_layers: Vec<String>,
     /// For a scene in the new layout (one with a layout file): the male's clip files, in the order they are looked up. Empty for a scene that is not split.
     male_animations: Vec<String>,
     bindings: Option<String>,
@@ -791,6 +793,13 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
     }
 
     order.push(format!("/strut/animations/scenes/{scene_id}.strutanim"));
+    /* Her everyday clips: her own file, her skeleton's (the clip set `base`), then the older single files. */
+    order.push(format!("/strut/animations/base/owners/{girl_id}.strutanim"));
+
+    if let Some(skeleton) = skeleton_path(&root, from_zip, find_either(pc_core::paths::girl_model("nude", &girl_id), pc_core::paths::girl_model_old("nude", &girl_id)).or_else(|| find_either(pc_core::paths::girl_model("dressed", &girl_id), pc_core::paths::girl_model_old("dressed", &girl_id))), body_type.as_deref()) {
+        order.push(format!("/strut/animations/base/skeletons/{skeleton}.strutanim"));
+    }
+
     order.push(format!("/{}", pc_core::paths::girl_base(&girl_id)));
     order.push(format!("/{}", pc_core::paths::girl_base_old(&girl_id)));
     order.push(format!("/{}", pc_core::paths::SHARED_BASE));
@@ -825,6 +834,16 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
         texture: find(format!("/textures/entities/{girl_id}.png")),
         animations,
         male_animations,
+        binding_layers: {
+            let mut layers = Vec::new();
+
+            if let Some(skeleton) = skeleton_path(&root, from_zip, find_either(pc_core::paths::girl_model("nude", &girl_id), pc_core::paths::girl_model_old("nude", &girl_id)).or_else(|| find_either(pc_core::paths::girl_model("dressed", &girl_id), pc_core::paths::girl_model_old("dressed", &girl_id))), body_type.as_deref()) {
+                layers.extend(find(format!("/strut/event_bindings/skeletons/{skeleton}.json")));
+            }
+
+            layers.extend(find(format!("/strut/event_bindings/owners/{girl_id}.json")));
+            layers
+        },
         bindings: find(format!("/strut/event_bindings/girls/{girl_id}.json")),
         sounds_json,
     })
@@ -960,7 +979,7 @@ fn viewer_files(app: State<App>, rel: String) -> Reply<ViewerFiles> {
         .filter(|f| {
             let n = f.rsplit('/').next().unwrap_or("");
 
-            n == format!("base.{id}.strutanim") || n.ends_with(&format!("-{id}.strutanim")) || n == "base.strutanim" || f.contains(&format!("/scenes/")) && f.contains(&format!("/owners/{id}.strutanim"))
+            n == format!("{id}.strutanim") && f.contains("/animations/base/owners/") || n == format!("base.{id}.strutanim") || n.ends_with(&format!("-{id}.strutanim")) || n == "base.strutanim" || f.contains(&format!("/scenes/")) && f.contains(&format!("/owners/{id}.strutanim"))
         })
         .cloned()
         .collect();

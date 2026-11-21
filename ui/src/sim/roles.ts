@@ -56,18 +56,17 @@ export class SceneCatalogue {
   private readonly byGirl = new Map<string, Map<Role, string[]>>();
   private readonly sides = new Map<string, Role>();
 
+  /**
+   * A scene in the old layout is single files (`<scene>-<girl>`, `<scene>`). A scene in the new layout is a folder per role: the host's clips are in `<scene>/host/owners/<girl>`
+   * (what she changes) and `<scene>/host/skeletons/<skeleton>` (what everyone on her skeleton plays), and each clip is looked up in her file first and in her skeleton's second.
+   */
   constructor(files: AnimationFile[], readonly sceneId: string, readonly girlId: string, readonly replaceDefault: boolean) {
-    for (const file of files) {
-      const name = file.path.slice(file.path.lastIndexOf('/') + 1).replace(/\.strutanim$/, '');
+    const raw = new Map<string, Map<Role, Map<number, string>>>();
+    const firstSides = new Map<string, Role>();
+    let layered = false;
 
-      if (!file.path.includes('/animations/scenes/')) continue;
-
-      const girl = name === sceneId ? BASE : name.startsWith(sceneId + '-') ? name.slice(sceneId.length + 1) : null;
-
-      if (girl === null) continue;
-
-      const collected = new Map<Role, Map<number, string>>();
-      let firstSide: Role | null = null;
+    const collect = (key: string, file: AnimationFile) => {
+      const collected = raw.get(key) ?? new Map<Role, Map<number, string>>();
 
       for (const clip of file.clips) {
         const parsed = parseClipName(clip.name);
@@ -79,12 +78,56 @@ export class SceneCatalogue {
         variants.set(parsed.index, clip.name);
         collected.set(parsed.role, variants);
 
-        if (firstSide === null && (parsed.role === 'slow_L' || parsed.role === 'slow_R')) firstSide = parsed.role;
+        if (!firstSides.has(key) && (parsed.role === 'slow_L' || parsed.role === 'slow_R')) firstSides.set(key, parsed.role);
       }
 
-      this.byGirl.set(girl, new Map([...collected].map(([role, variants]) => [role, [...variants.entries()].sort((a, b) => a[0] - b[0]).map(([, clipName]) => clipName)])));
+      raw.set(key, collected);
+    };
 
-      if (firstSide) this.sides.set(girl, firstSide);
+    for (const file of files) {
+      const name = file.path.slice(file.path.lastIndexOf('/') + 1).replace(/\.strutanim$/, '');
+
+      if (!file.path.includes('/animations/scenes/')) continue;
+
+      if (file.path.includes(`/animations/scenes/${sceneId}/host/`)) {
+        layered = true;
+        collect(file.path.includes('/host/owners/') ? name : BASE, file);
+        continue;
+      }
+
+      const girl = name === sceneId ? BASE : name.startsWith(sceneId + '-') ? name.slice(sceneId.length + 1) : null;
+
+      if (girl !== null) collect(girl, file);
+    }
+
+    const finish = (variants: Map<Role, Map<number, string>>) => new Map([...variants].map(([role, byIndex]) => [role, [...byIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, clipName]) => clipName)] as [Role, string[]]));
+
+    for (const [key, variants] of raw) {
+      this.byGirl.set(key, finish(variants));
+
+      const side = firstSides.get(key);
+
+      if (side) this.sides.set(key, side);
+    }
+
+    if (layered) {
+      /* Her clips are her own file's, and the rest are her skeleton's: a clip of the same name in both is hers. */
+      const merged = new Map<Role, Map<number, string>>();
+
+      for (const source of [raw.get(BASE), raw.get(girlId)]) {
+        for (const [role, variants] of source ?? []) {
+          const into = merged.get(role) ?? new Map<number, string>();
+
+          for (const [index, clipName] of variants) into.set(index, clipName);
+          merged.set(role, into);
+        }
+      }
+
+      this.byGirl.set(girlId, finish(merged));
+
+      const side = firstSides.get(girlId) ?? firstSides.get(BASE);
+
+      if (side) this.sides.set(girlId, side);
     }
   }
 

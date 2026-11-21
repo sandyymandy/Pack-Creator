@@ -123,14 +123,7 @@ pub fn subtree(model: &Model, root: &str) -> Vec<usize> {
 
 /// The hash the game recomputes from a skeleton: every group bone's name in order, each followed by a NUL, hashed as one string (Java's `String.hashCode`).
 pub fn fingerprint(model: &Model) -> i32 {
-    let mut names = String::new();
-
-    for bone in &model.group_bones {
-        names.push_str(&bone.name);
-        names.push('\0');
-    }
-
-    names.encode_utf16().fold(0i32, |hash, unit| hash.wrapping_mul(31).wrapping_add(unit as i32))
+    model.fingerprint()
 }
 
 /// What the split of one scene file made.

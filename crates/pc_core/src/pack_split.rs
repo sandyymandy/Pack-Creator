@@ -42,6 +42,9 @@ struct Manifest {
     created: Vec<String>,
     replaced: Vec<String>,
     deleted: Vec<String>,
+    /// Later changes made on top of this one, put back first.
+    #[serde(default)]
+    also: Vec<String>,
 }
 
 struct GirlModel {
@@ -127,6 +130,9 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
     let mut deletes: Vec<String> = Vec::new();
     let mut scenes: BTreeMap<String, SceneParts> = BTreeMap::new();
 
+    /* Every name a bone of the old male rig has in some model: a file that moves any of them still has the rig in it. */
+    let rig_names: HashSet<String> = models.iter().flat_map(|m| scene_split::subtree(&m.model, MALE_ROOT).into_iter().map(|i| m.model.group_bones[i].name.clone()).collect::<Vec<_>>()).collect();
+
     /* Scene files and base animations. */
     for rel in &files {
         let parts: Vec<&str> = rel.split('/').collect();
@@ -140,7 +146,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
         let Ok(bytes) = std::fs::read(root.join(rel)) else { continue };
         let Ok(clips) = strut_anim::read(&bytes) else { continue };
 
-        if !clips.iter().any(|c| c.channels.iter().any(|ch| ch.target == MALE_ROOT)) && !in_scenes {
+        if !clips.iter().any(|c| c.channels.iter().any(|ch| rig_names.contains(&ch.target))) && !in_scenes {
             continue;
         }
 
@@ -365,7 +371,35 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
         return Ok(report);
     }
 
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0).to_string();
+    let stamp = commit(root, &writes, &deletes)?;
+
+    report.stamp = Some(stamp);
+    Ok(report)
+}
+
+#[derive(Default)]
+struct SceneParts {
+    hosts: std::collections::BTreeSet<String>,
+    /// Who it was for, whether by girl, the male's id, its half of the file, and the whole file's clips.
+    males: Vec<(String, bool, String, Vec<u8>, Vec<Clip>)>,
+}
+
+fn clips_equal(a: &[Clip], b: &[Clip]) -> bool {
+    a == b
+}
+
+
+/// Writes `writes` and removes `deletes`, after keeping a copy of every file that is replaced or removed (and a list of those that are made) in `.packcreator/splits/<stamp>`, so
+/// that `undo_split` can put it all back. Returns the stamp.
+pub fn commit(root: &Path, writes: &BTreeMap<String, Vec<u8>>, deletes: &[String]) -> Result<String> {
+    let mut stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+
+    /* Two commits in one millisecond must not share a folder. */
+    while root.join(crate::project::META_DIR).join("splits").join(stamp.to_string()).exists() {
+        stamp += 1;
+    }
+
+    let stamp = stamp.to_string();
     let folder = root.join(crate::project::META_DIR).join("splits").join(&stamp);
     let mut manifest = Manifest::default();
 
@@ -394,7 +428,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
     std::fs::create_dir_all(&folder).map_err(|e| crate::Error::io(&folder, e))?;
     std::fs::write(folder.join("manifest.json"), serde_json::to_vec_pretty(&manifest).unwrap_or_default()).map_err(|e| crate::Error::io(&folder, e))?;
 
-    for (rel, bytes) in &writes {
+    for (rel, bytes) in writes {
         if let Some(parent) = root.join(rel).parent() {
             std::fs::create_dir_all(parent).map_err(|e| crate::Error::io(parent, e))?;
         }
@@ -402,25 +436,22 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
         fs_ops::write_bytes(root, rel, bytes)?;
     }
 
-    for rel in &deletes {
+    for rel in deletes {
         if !writes.contains_key(rel) {
             let _ = std::fs::remove_file(root.join(rel));
         }
     }
 
-    report.stamp = Some(stamp);
-    Ok(report)
+    Ok(stamp)
 }
 
-#[derive(Default)]
-struct SceneParts {
-    hosts: std::collections::BTreeSet<String>,
-    /// Who it was for, whether by girl, the male's id, its half of the file, and the whole file's clips.
-    males: Vec<(String, bool, String, Vec<u8>, Vec<Clip>)>,
-}
+/// Says that undoing `stamp` also undoes `later` (a change made on top of it, which has to be put back first).
+pub fn chain(root: &Path, stamp: &str, later: &str) -> Result<()> {
+    let file = root.join(crate::project::META_DIR).join("splits").join(stamp).join("manifest.json");
+    let mut manifest: Manifest = serde_json::from_slice(&std::fs::read(&file).map_err(|e| crate::Error::io(&file, e))?).map_err(|e| crate::Error::invalid(format!("the undo information is damaged: {e}")))?;
 
-fn clips_equal(a: &[Clip], b: &[Clip]) -> bool {
-    a == b
+    manifest.also.push(later.to_string());
+    std::fs::write(&file, serde_json::to_vec_pretty(&manifest).unwrap_or_default()).map_err(|e| crate::Error::io(&file, e))
 }
 
 /// Puts back what a conversion changed: files it made are removed, files it replaced or removed are restored.
@@ -428,6 +459,10 @@ pub fn undo_split(root: &Path, stamp: &str) -> Result<usize> {
     let folder = root.join(crate::project::META_DIR).join("splits").join(stamp);
     let manifest: Manifest = serde_json::from_slice(&std::fs::read(folder.join("manifest.json")).map_err(|e| crate::Error::io(&folder, e))?).map_err(|e| crate::Error::invalid(format!("the undo information is damaged: {e}")))?;
     let mut count = 0;
+
+    for later in manifest.also.iter().rev() {
+        count += undo_split(root, later)?;
+    }
 
     for rel in &manifest.created {
         let _ = std::fs::remove_file(root.join(rel));

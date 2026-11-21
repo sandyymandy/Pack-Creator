@@ -380,3 +380,13 @@ mod player_probe {
         println!("PLAYER id={:?} ext={:?} units={} bytes={} textures={:?}", m.skeleton_id, m.extensions, m.units_per_block, b.len(), m.textures.iter().map(|t| t.name.clone()).collect::<Vec<_>>());
     }
 }
+
+#[cfg(test)]
+mod sound_probe {
+    #[test]
+    #[ignore]
+    fn sounds() {
+        let f = std::path::PathBuf::from(r"C:\Users\Sandyy\Documents\Idea Projects\Pleasure Horizons\src\main\resources\assets\pleasurehorizons\strut\animations\scenes\cowgirl\host\owners\momo.strutanim");
+        for c in crate::strut_anim::read(&std::fs::read(f).unwrap()).unwrap() { for e in c.events { if e.kind != "instruction" { println!("SND {} t={} kind={} payload={:?} auth={}", c.name, e.time, e.kind, e.payload, e.authority); } } }
+    }
+}

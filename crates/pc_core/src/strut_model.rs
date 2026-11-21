@@ -551,6 +551,21 @@ pub fn remove_bones(bytes: &[u8], remove: &std::collections::HashSet<usize>) -> 
     Ok(out)
 }
 
+impl Model {
+    /// The hash the game recomputes from a skeleton: every group bone's name in order, each followed by a NUL, hashed as one string (Java's `String.hashCode`). Animation files made for
+    /// the model carry it.
+    pub fn fingerprint(&self) -> i32 {
+        let mut names = String::new();
+
+        for bone in &self.group_bones {
+            names.push_str(&bone.name);
+            names.push('\0');
+        }
+
+        names.encode_utf16().fold(0i32, |hash, unit| hash.wrapping_mul(31).wrapping_add(unit as i32))
+    }
+}
+
 /// The extension section that holds a model's skeleton id.
 pub const SKELETON_EXTENSION: &str = "strut:skeleton";
 

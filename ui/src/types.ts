@@ -244,6 +244,8 @@ export interface SimFiles {
   dressed: string | null;
   texture: string | null;
   animations: string[];
+  /** Her event bindings in layers (the skeleton's, then hers). */
+  binding_layers: string[];
   /** The male's clip files, for a scene in the new layout. */
   male_animations: string[];
   bindings: string | null;

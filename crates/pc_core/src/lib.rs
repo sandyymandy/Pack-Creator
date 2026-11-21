@@ -15,6 +15,7 @@ pub mod history;
 pub mod import;
 pub mod json_ast;
 pub mod migrate;
+pub mod layers;
 pub mod layout;
 pub mod oldpack;
 pub mod pack_split;

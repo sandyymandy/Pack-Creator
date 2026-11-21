@@ -19,6 +19,8 @@ struct Info {
     has_male_rig: bool,
     clips: Vec<(String, f32, u8)>,
     readable: bool,
+    /// A model: its fingerprint. An animation: the fingerprint it carries.
+    fingerprint: i32,
 }
 
 fn info_of(root: &Path, rel: &str) -> Info {
@@ -44,11 +46,13 @@ fn info_of(root: &Path, rel: &str) -> Info {
             if let Ok(model) = strut_model::read(&bytes) {
                 info.readable = true;
                 info.skeleton_id = model.skeleton_id.clone();
+                info.fingerprint = model.fingerprint();
                 info.has_male_rig = model.group_bones.iter().any(|b| b.name == crate::scene_split::MALE_ROOT && b.parent_index < 0);
             }
         } else if let Ok(clips) = strut_anim::read(&bytes) {
             info.readable = true;
             info.skeleton_id = strut_anim::skeleton_id(&bytes).ok().flatten();
+            info.fingerprint = strut_anim::fingerprint(&bytes).unwrap_or(0);
             info.clips = clips.into_iter().map(|c| (c.name, c.duration, c.loop_mode)).collect();
         }
     }
@@ -106,6 +110,39 @@ pub fn check(root: &Path, facts: &PackFacts) -> Vec<Diagnostic> {
             old_files.entry(name.to_string()).or_default().push(rel.clone());
         } else if crate::paths::is_girl_model(rest) {
             models.push((rel.clone(), parts[parts.len() - 1].trim_end_matches(".strutmodel").to_string()));
+        }
+    }
+
+    /* The animation files made for one girl's model carry that model's fingerprint; the game compares it when a file names no skeleton id. */
+    let mut fingerprints: BTreeMap<String, i32> = BTreeMap::new();
+
+    for (rel, girl) in &models {
+        let info = info_of(root, rel);
+
+        if info.readable && (rel.contains("/nude/") || !fingerprints.contains_key(girl)) {
+            fingerprints.insert(girl.clone(), info.fingerprint);
+        }
+    }
+
+    for rel in &facts.files {
+        let Some((_, rest)) = strut_path(rel) else { continue };
+        let parts: Vec<&str> = rest.split('/').collect();
+        let girl = if let Some(girl) = parts.last().and_then(|n| n.strip_prefix("base.")).and_then(|n| n.strip_suffix(".strutanim")) {
+            Some(girl.to_string())
+        } else if parts.len() == 6 && parts[4] == "owners" && parts[3] == "host" && parts[5].ends_with(".strutanim") {
+            Some(parts[5].trim_end_matches(".strutanim").to_string())
+        } else if parts.len() == 4 && parts[0] == "animations" && parts[1] == "base" && parts[2] == "owners" && parts[3].ends_with(".strutanim") {
+            Some(parts[3].trim_end_matches(".strutanim").to_string())
+        } else {
+            None
+        };
+
+        if let Some(wanted) = girl.as_ref().and_then(|g| fingerprints.get(g)) {
+            let info = info_of(root, rel);
+
+            if info.readable && info.fingerprint != *wanted {
+                found.push(file_level(Severity::Warning, "stale-fingerprint", format!("This animation was made for a model with a different set of bones (it carries 0x{:08x}, her model has 0x{:08x}). The game warns that it was authored against a different skeleton. The pack update stamps it again.", info.fingerprint as u32, *wanted as u32), rel));
+            }
         }
     }
 
@@ -331,7 +368,7 @@ mod tests {
         crate::migrate::update(&copy, true).unwrap();
 
         let after = codes(&copy);
-        let new_codes = ["scene-without-layout", "role-without-files", "role-without-file-for-skeleton", "girl-not-in-role", "old-and-new-scene-files", "animation-without-skeleton-id", "model-without-skeleton-id", "clip-differs-between-roles", "owner-clip-not-in-skeleton", "layout-clip-length", "unused-male-rig", "bad-layout", "scene-without-animation"];
+        let new_codes = ["scene-without-layout", "role-without-files", "role-without-file-for-skeleton", "girl-not-in-role", "old-and-new-scene-files", "animation-without-skeleton-id", "model-without-skeleton-id", "clip-differs-between-roles", "owner-clip-not-in-skeleton", "layout-clip-length", "unused-male-rig", "bad-layout", "scene-without-animation", "stale-fingerprint"];
 
         assert!(new_codes.iter().all(|c| !after.contains(*c)), "a converted pack should be clean of the layout checks: {:?}", new_codes.iter().filter(|c| after.contains(**c)).collect::<Vec<_>>());
 

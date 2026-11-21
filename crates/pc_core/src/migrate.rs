@@ -2,6 +2,7 @@
 //! look like raises it by one, and a pack is updated by running the steps from its number up, in place, with the changes kept so they can be undone.
 //!
 //! - 1: a girl's model carries the male as a second rig (`steve`) and each scene's animation moves both.
+//! - 4: layered files: event bindings and everyday animations by skeleton and owner, and the phase, variant and side of each clip in the scene layouts (see `layers`).
 //! - 3: the files are grouped under `entities`, `blocks` and `items` (girls' models, base animations and physics files move; see `paths`).
 //! - 2: one model per participant: the male is the base mod's own model, every scene is a role folder with a layout, models and animation files carry skeleton ids.
 //!
@@ -15,7 +16,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 /// The format this version of the tool writes.
-pub const CURRENT: u32 = 3;
+pub const CURRENT: u32 = 4;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Step {
@@ -24,7 +25,11 @@ pub struct Step {
     pub detail: &'static str,
 }
 
-const STEPS: [Step; 2] = [Step {
+const STEPS: [Step; 3] = [Step {
+    to: 4,
+    title: "Layered files",
+    detail: "Event bindings and everyday animations are written once for a skeleton and again only for what one girl changes (strut/event_bindings/skeletons and owners, strut/animations/base/skeletons and owners), and every clip in a scene layout gets its phase, variant and side.",
+}, Step {
     to: 3,
     title: "Files grouped under entities, blocks and items",
     detail: "Moves the girls' models, base animations and physics files to the folders the game reads (strut/models/entities/girls/..., strut/animations/entities/...), and blocks and items to their own plural folders.",
@@ -133,6 +138,15 @@ fn rename_legacy(root: &Path) -> Result<usize> {
     Ok(count)
 }
 
+/// Whether the pack still has what format 4 layers: a girl's whole bindings table, her whole base animation file, or a layout whose clips have no phase.
+fn needs_layers(root: &Path) -> bool {
+    crate::check::walk(root).iter().any(|rel| {
+        rel.contains("/strut/event_bindings/girls/")
+            || rel.contains("/strut/animations/entities/girls/base.")
+            || (rel.contains("/strut/scenes/") && rel.ends_with(".strutscene") && std::fs::read_to_string(root.join(rel)).map_or(false, |t| t.contains("\"clips\"") && !t.contains("\"phase\"")))
+    })
+}
+
 /// The files that are still where format 2 kept them.
 fn files_to_move(root: &Path) -> Vec<(String, String)> {
     crate::check::walk(root).into_iter().filter_map(|rel| crate::paths::moved(&rel).map(|new| (rel, new))).collect()
@@ -179,7 +193,8 @@ pub fn status(root: &Path, meta: &ProjectMeta) -> Status {
     let rig = has_old_male(root);
     let renames = !legacy_files(root).is_empty();
     let moves = !files_to_move(root).is_empty();
-    let old_rig = rig || renames || moves;
+    let layers = needs_layers(root);
+    let old_rig = rig || renames || moves || layers;
     let needed = meta.format < CURRENT || old_rig;
 
     Status {
@@ -188,9 +203,57 @@ pub fn status(root: &Path, meta: &ProjectMeta) -> Status {
         needed,
         reason: (old_rig && meta.format >= CURRENT).then(|| "Some files are still in the form of an older format.".to_string()),
         /* Only the steps that have something to do in this pack are listed. */
-        steps: STEPS.iter().filter(|s| if s.to == 3 { moves } else { rig || renames }).cloned().collect(),
+        steps: STEPS.iter().filter(|s| match s.to { 4 => layers, 3 => moves, _ => rig || renames }).cloned().collect(),
         newer: meta.format > CURRENT,
     }
+}
+
+/// Gives the animation files made for one girl's model (her base file and her scene files) the fingerprint of the model as it is now: once the old male rig is cut out of the
+/// model its bone names are fewer, and a file made before carries the hash of the old list.
+fn restamp(root: &Path) -> Result<usize> {
+    let mut models: BTreeMap<String, i32> = BTreeMap::new();
+    let files = crate::check::walk(root);
+
+    for rel in &files {
+        let Some(rest) = rel.split_once("/asset_sync/strut/").map(|x| x.1) else { continue };
+
+        if crate::paths::is_girl_model(rest) {
+            if let Some(model) = std::fs::read(root.join(rel)).ok().and_then(|b| crate::strut_model::read(&b).ok()) {
+                let girl = rest.rsplit('/').next().unwrap_or("").trim_end_matches(".strutmodel").to_string();
+
+                if rel.contains("/nude/") || !models.contains_key(&girl) {
+                    models.insert(girl, model.fingerprint());
+                }
+            }
+        }
+    }
+
+    let mut count = 0;
+
+    for rel in &files {
+        let Some(rest) = rel.split_once("/asset_sync/strut/").map(|x| x.1) else { continue };
+        let parts: Vec<&str> = rest.split('/').collect();
+        let girl = if let Some(g) = parts.last().and_then(|n| n.strip_prefix("base.")).and_then(|n| n.strip_suffix(".strutanim")) {
+            g.to_string()
+        } else if parts.len() == 6 && parts[0] == "animations" && parts[3] == "host" && parts[4] == "owners" && parts[5].ends_with(".strutanim") {
+            parts[5].trim_end_matches(".strutanim").to_string()
+        } else if parts.len() == 4 && parts[0] == "animations" && parts[1] == "base" && parts[2] == "owners" && parts[3].ends_with(".strutanim") {
+            parts[3].trim_end_matches(".strutanim").to_string()
+        } else {
+            continue;
+        };
+        let Some(wanted) = models.get(&girl) else { continue };
+        let Ok(bytes) = std::fs::read(root.join(rel)) else { continue };
+
+        if crate::strut_anim::fingerprint(&bytes).map_or(false, |f| f != *wanted) {
+            if let Ok(fixed) = crate::strut_anim::set_fingerprint(&bytes, *wanted) {
+                std::fs::write(root.join(rel), fixed).map_err(|e| crate::Error::io(&root.join(rel), e))?;
+                count += 1;
+            }
+        }
+    }
+
+    Ok(count)
 }
 
 /// Brings the pack up to the current format (when `apply`), or only says what it would do. The pack's number is raised only when the update is applied and nothing was left
@@ -215,6 +278,26 @@ pub fn update(root: &Path, apply: bool) -> Result<Report> {
     if apply {
         let plan = skeleton_ids::plan(root, &BTreeMap::new());
         let written = skeleton_ids::apply(root, &plan.assignments)?;
+
+        /* The layering comes after the move and the split, and is kept for undo on top of the split's. */
+        let (layer_stamp, layer_notes) = crate::layers::apply(root)?;
+
+        report.findings.extend(layer_notes);
+
+        if let Some(later) = layer_stamp {
+            match &report.stamp {
+                Some(first) => crate::pack_split::chain(root, first, &later)?,
+                None => report.stamp = Some(later),
+            }
+
+            report.files_written += 1;
+        }
+
+        let stamped = restamp(root)?;
+
+        if stamped > 0 {
+            report.findings.push(format!("{stamped} animation files were stamped again with the bones of their girl's model."));
+        }
 
         if written.written > 0 {
             report.findings.push(format!("Skeleton ids written to {} more models and animation files.", written.written));
@@ -281,6 +364,91 @@ mod tests {
 
         assert_eq!(meta.format, CURRENT);
         assert!(!status(&copy, &meta).needed);
+        let _ = std::fs::remove_dir_all(&copy);
+    }
+
+    #[test]
+    fn layering_gives_every_girl_exactly_what_she_had() {
+        let source = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test_pack");
+
+        if !source.join("data").is_dir() {
+            return;
+        }
+
+        let copy = std::env::temp_dir().join(format!("pc-layers-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&copy);
+        copy_dir(&source, &copy);
+        update(&copy, true).unwrap();
+
+        let ids: BTreeMap<String, String> = skeleton_ids::plan(&copy, &BTreeMap::new()).assignments.into_iter().filter(|a| a.kind == skeleton_ids::Kind::Model).map(|a| (a.owner, a.id)).collect();
+        let sync = "data/pleasurehorizons/asset_sync/strut";
+        let path_of = |id: &str| id.split_once(':').map_or(id.to_string(), |(_, p)| p.to_string());
+        let (mut tables, mut base_files) = (0, 0);
+
+        for girl in ids.keys() {
+            /* Bindings: the skeleton's table with hers over it is the table she had. */
+            let original = source.join(format!("{sync}/event_bindings/girls/{girl}.json"));
+
+            if let Ok(text) = std::fs::read_to_string(&original) {
+                let had: serde_json::Value = serde_json::from_str(&text).unwrap();
+                let mut merged = serde_json::Map::new();
+
+                for file in [format!("{sync}/event_bindings/skeletons/{}.json", path_of(&ids[girl])), format!("{sync}/event_bindings/owners/{girl}.json")] {
+                    if let Some(layer) = std::fs::read_to_string(copy.join(file)).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()) {
+                        merged.extend(layer["bindings"].as_object().cloned().unwrap_or_default());
+                    }
+                }
+
+                assert_eq!(serde_json::Value::Object(merged), had["bindings"], "{girl}: her bindings changed");
+                assert!(!copy.join(format!("{sync}/event_bindings/girls/{girl}.json")).exists());
+                tables += 1;
+            }
+
+            /* Everyday clips: the skeleton's and hers together are the clips she had, clip for clip. */
+            let original = source.join(format!("{sync}/animations/base.{girl}.strutanim"));
+
+            if let Ok(bytes) = std::fs::read(&original) {
+                let mut had = crate::strut_anim::read(&bytes).unwrap();
+
+                /* The old male rig's channels went to the male when the scenes were split (and are not in a base file's host half). */
+                if let Some(model) = std::fs::read(source.join(format!("{sync}/models/nude/{girl}.strutmodel"))).ok().and_then(|b| crate::strut_model::read(&b).ok()) {
+                    let rig: std::collections::HashSet<String> = crate::scene_split::subtree(&model, crate::scene_split::MALE_ROOT).into_iter().map(|i| model.group_bones[i].name.clone()).collect();
+
+                    for clip in &mut had {
+                        clip.channels.retain(|c| !rig.contains(&c.target));
+                    }
+                }
+
+                let mut got: Vec<crate::strut_anim::Clip> = Vec::new();
+
+                for file in [format!("{sync}/animations/base/owners/{girl}.strutanim"), format!("{sync}/animations/base/skeletons/{}.strutanim", path_of(&ids[girl]))] {
+                    if let Some(clips) = std::fs::read(copy.join(file)).ok().and_then(|b| crate::strut_anim::read(&b).ok()) {
+                        for clip in clips {
+                            if !got.iter().any(|c| c.name == clip.name) {
+                                got.push(clip);
+                            }
+                        }
+                    }
+                }
+
+                assert_eq!(got.len(), had.len(), "{girl}: clip count");
+
+                for clip in &had {
+                    if !got.iter().any(|c| c == clip) {
+                        let other = got.iter().find(|c| c.name == clip.name).unwrap();
+
+                        eprintln!("DIFF {} channels {} vs {} events {:?} vs {:?} dur {} {} targets {:?} / {:?}", clip.name, clip.channels.len(), other.channels.len(), clip.events.len(), other.events.len(), clip.duration, other.duration, clip.channels.iter().map(|c| &c.target).take(6).collect::<Vec<_>>(), other.channels.iter().map(|c| &c.target).take(6).collect::<Vec<_>>());
+                    }
+
+                    assert!(got.iter().any(|c| c == clip), "{girl}: the clip {} changed", clip.name);
+                }
+
+                base_files += 1;
+            }
+        }
+
+        assert!(tables > 3 && base_files > 3, "{tables} tables, {base_files} base files");
+        assert!(!status(&copy, &project::open(&copy).unwrap()).needed);
         let _ = std::fs::remove_dir_all(&copy);
     }
 }

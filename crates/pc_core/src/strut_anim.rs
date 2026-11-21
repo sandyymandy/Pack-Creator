@@ -350,6 +350,52 @@ pub fn set_skeleton_id(bytes: &[u8], id: Option<&str>) -> Result<Vec<u8>, String
     Ok(out)
 }
 
+/// The file with only the named clips, each copied byte for byte, and the skeleton id given (or none). The clips keep their order in the file.
+pub fn subset(bytes: &[u8], names: &[String], skeleton: Option<&str>) -> Result<Vec<u8>, String> {
+    let parsed = parse(bytes)?;
+    let mut strings = parsed.strings.clone();
+    let mut body: Vec<u8> = Vec::new();
+    let mut count = 0;
+
+    for (clip, span) in parsed.clips.iter().zip(&parsed.spans) {
+        if names.contains(&clip.name) {
+            body.extend_from_slice(&bytes[span.start..span.end]);
+            count += 1;
+        }
+    }
+
+    if count == 0 {
+        return Err("none of those clips is in the file".into());
+    }
+
+    if let Some(id) = skeleton {
+        if !strings.iter().any(|s| s == id) {
+            strings.push(id.to_string());
+        }
+    }
+
+    let layout = layout(bytes)?;
+
+    Ok(assemble(&layout, &strings, &body, count, None, skeleton))
+}
+
+/// The skeleton fingerprint in the file's header: the hash of the bone names of the model the clips were made for (the game compares it when the file names no skeleton id).
+pub fn fingerprint(bytes: &[u8]) -> Result<i32, String> {
+    parse(bytes)?;
+
+    Ok(i32::from_le_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]))
+}
+
+/// The file with another fingerprint in its header; every other byte is as it was.
+pub fn set_fingerprint(bytes: &[u8], fingerprint: i32) -> Result<Vec<u8>, String> {
+    parse(bytes)?;
+
+    let mut out = bytes.to_vec();
+
+    out[16..20].copy_from_slice(&fingerprint.to_le_bytes());
+    Ok(out)
+}
+
 /// Where the clips and their channels sit in a file, for tools that copy them into another file.
 pub struct ClipSpan {
     pub start: usize,

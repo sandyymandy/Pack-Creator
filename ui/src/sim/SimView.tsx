@@ -128,6 +128,9 @@ async function loadAssets(sceneId: string, girlId: string, example: boolean, bod
     readJson(files.bindings)
   ]);
 
+  /* Bindings in layers: the skeleton's table, then hers over it (a cue she has replaces the skeleton's). */
+  const layers = await Promise.all((files.binding_layers ?? []).map(readJson));
+
   /* A scene in the new layout plays the girl and the male together: the male's model and clips are joined to hers for drawing. */
   const male = maleFiles.length > 0 ? await api.bundledMale().catch(() => null) : null;
   const nude = girlNude && male ? withMale(girlNude, male) : girlNude;
@@ -153,7 +156,7 @@ async function loadAssets(sceneId: string, girlId: string, example: boolean, bod
     dressed,
     texture: textureUrl,
     animations,
-    bindings: isObject(bindingsFile.bindings) ? (bindingsFile.bindings as Record<string, Record<string, unknown>>) : {},
+    bindings: Object.assign({}, ...[bindingsFile, ...layers].map(file => (isObject(file.bindings) ? (file.bindings as Record<string, Record<string, unknown>>) : {}))),
     sounds
   };
 }

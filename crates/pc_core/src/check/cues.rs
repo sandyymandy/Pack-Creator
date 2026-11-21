@@ -205,6 +205,15 @@ pub fn animation(rel: &str, bytes: &[u8]) -> (Vec<Diagnostic>, Vec<String>) {
             if event.kind == "instruction" {
                 cues.extend(cues_of(&event.payload));
             }
+
+            /* A sound event is `name`, `name, volume` or `name, volume, pitch`: what follows the name has to be a number. */
+            if event.kind == "sound" {
+                let parts: Vec<&str> = event.payload.split(',').map(str::trim).collect();
+
+                for extra in parts.iter().skip(1).filter(|p| p.parse::<f32>().is_err()) {
+                    found.push(file_level(Severity::Warning, "sound-event-number", format!("In the clip {} at {:.2} s, the sound event \"{}\" has \"{extra}\" where a volume or pitch (a number) belongs. The game cannot read it. If it is a second sound, make it an event of its own.", clip.name, event.time, event.payload), rel));
+                }
+            }
         }
     }
 
