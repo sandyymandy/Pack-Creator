@@ -64,16 +64,6 @@ pub fn compose(position: [f64; 3], rotation: [f64; 3], scale: [f64; 3]) -> Mat4 
     m
 }
 
-type Ease = fn(f64) -> f64;
-
-fn out(f: Ease, t: f64) -> f64 {
-    1.0 - f(1.0 - t)
-}
-
-fn in_out(f: Ease, t: f64) -> f64 {
-    if t < 0.5 { f(t * 2.0) / 2.0 } else { 1.0 - f((1.0 - t) * 2.0) / 2.0 }
-}
-
 /// The easing a keyframe names, as a function of how far along the segment it is. An unknown name is linear.
 fn ease(name: &str, t: f64, args: &[f32]) -> f64 {
     let lower = name.to_lowercase();
@@ -164,8 +154,14 @@ fn bezier(elapsed: f64, length: f64, start: f64, end: f64, right_time: f64, righ
 }
 
 /// A key's value: a Molang expression reads as 0.
+///
+/// The one thing read of an expression is a constant added on the end, `(...) + (number)`, which is how a conversion that moves a bone shifts an expression: both sides of a
+/// comparison then still agree on where the bone is, with what the expression itself gives left out.
 fn value(raw: &Value3) -> [f64; 3] {
-    [0, 1, 2].map(|i| if raw.expressions[i].is_some() { 0.0 } else { raw.literals[i] as f64 })
+    [0, 1, 2].map(|i| match &raw.expressions[i] {
+        None => raw.literals[i] as f64,
+        Some(e) => e.trim_end().strip_suffix(')').and_then(|rest| rest.rsplit_once(") + (")).and_then(|(_, n)| n.parse::<f64>().ok()).unwrap_or(0.0),
+    })
 }
 
 /// A channel's value at a time (seconds), or the fallback when it has no keys.
@@ -291,7 +287,6 @@ mod tests {
         assert!((ease("easeOutQuad", 0.5, &[]) - 0.75).abs() < 1e-12);
         assert_eq!(ease("linear", 0.3, &[]), 0.3);
         assert!((spline(0.5, 0.0, 1.0, 2.0, 3.0) - 1.5).abs() < 1e-12);
-        assert!((out(|t| t * t, 0.5) - 0.75).abs() < 1e-12 && (in_out(|t| t, 0.25) - 0.25).abs() < 1e-12);
     }
 
     #[test]
@@ -309,5 +304,26 @@ mod tests {
 
         assert!(posed.iter().any(|(name, m)| distance(m, &rest[name]) > 1e-6), "the clip moved nothing");
         assert!(posed.values().all(|m| m.iter().all(|v| v.is_finite())));
+    }
+}
+
+#[cfg(test)]
+mod probe {
+    #[test]
+    #[ignore]
+    fn steve() {
+        let folder = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test_pack/data/pleasurehorizons/asset_sync/strut");
+        for name in ["jenny", "ellie", "2b"] {
+            let m = crate::strut_model::read(&std::fs::read(folder.join(format!("models/nude/{name}.strutmodel"))).unwrap()).unwrap();
+            let roots: Vec<_> = m.group_bones.iter().enumerate().filter(|(_, b)| b.parent_index < 0).map(|(i, b)| (i, b.name.clone(), b.pivot, b.rotation)).collect();
+            println!("PROBE {name}: bones={} cubes={} meshes={} armatures={} ext={:?} roots={roots:?}", m.group_bones.len(), m.cubes.len(), m.meshes.len(), m.armatures.len(), m.extensions);
+            let steve = m.group_bones.iter().position(|b| b.name == "steve");
+            if let Some(s) = steve {
+                let sub: Vec<_> = m.group_bones.iter().enumerate().filter(|(i, b)| { let mut p = b.parent_index; let mut x = *i; loop { if x == s { return true; } if p < 0 { return false; } x = p as usize; p = m.group_bones[x].parent_index; } }).map(|(_, b)| b.name.clone()).collect();
+                let used: std::collections::BTreeSet<u16> = m.group_bones.iter().enumerate().filter(|(i, _)| { let mut x = *i as i32; while x >= 0 { if x as usize == s { return true; } x = m.group_bones[x as usize].parent_index as i32; } false }).flat_map(|(_, b)| b.elements.iter().map(|e| m.cubes[e.index as usize].texture_index)).collect();
+                println!("PROBE {name}: textures {:?} used by steve {:?}", m.textures.iter().map(|t| format!("{}:{}x{}", t.name, t.width, t.height)).collect::<Vec<_>>(), used);
+                println!("PROBE {name}: steve subtree {} bones: {}", sub.len(), sub.join(","));
+            }
+        }
     }
 }

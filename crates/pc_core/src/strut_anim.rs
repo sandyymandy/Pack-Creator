@@ -111,6 +111,8 @@ struct Span {
     channels_start: usize,
     events_start: usize,
     end: usize,
+    /* Where each channel's record starts and ends. */
+    channel_spans: Vec<(usize, usize)>,
 }
 
 struct Parsed {
@@ -180,8 +182,10 @@ fn parse(bytes: &[u8]) -> Result<Parsed, String> {
         let channels_start = r.at;
 
         let mut channels = Vec::with_capacity(channel_count as usize);
+        let mut channel_spans = Vec::with_capacity(channel_count as usize);
 
         for _ in 0..channel_count {
+            let channel_start = r.at;
             let target = name(r.u16("a channel target")?, &strings)?;
 
             let kind = if r.u8("a channel target kind")? == 1 { "ARMATURE_BONE" } else { "GROUP_BONE" }.to_string();
@@ -248,6 +252,7 @@ fn parse(bytes: &[u8]) -> Result<Parsed, String> {
             }
 
             channels.push(Channel { target, kind, property, keys });
+            channel_spans.push((channel_start, r.at));
         }
 
         let events_start = r.at;
@@ -264,7 +269,7 @@ fn parse(bytes: &[u8]) -> Result<Parsed, String> {
         }
 
         clips.push(Clip { name: clip_name, duration, loop_mode, channels, events });
-        spans.push(Span { start, channels_start, events_start, end: r.at });
+        spans.push(Span { start, channels_start, events_start, end: r.at, channel_spans });
     }
 
     Ok(Parsed { version_and_flags: [(version & 0xFF) as u8, (version >> 8) as u8, (flags & 0xFF) as u8, (flags >> 8) as u8], fingerprint_and_rest: rest, strings, clips, spans })
@@ -343,6 +348,72 @@ pub fn set_skeleton_id(bytes: &[u8], id: Option<&str>) -> Result<Vec<u8>, String
     }
 
     Ok(out)
+}
+
+/// Where the clips and their channels sit in a file, for tools that copy them into another file.
+pub struct ClipSpan {
+    pub start: usize,
+    pub channels_start: usize,
+    pub events_start: usize,
+    pub end: usize,
+    pub channel_spans: Vec<(usize, usize)>,
+}
+
+pub struct Layout {
+    pub strings: Vec<String>,
+    pub clips: Vec<ClipSpan>,
+    version_and_flags: [u8; 4],
+    fingerprint_and_rest: Vec<u8>,
+}
+
+/// The string table and where every clip and channel is.
+pub fn layout(bytes: &[u8]) -> Result<Layout, String> {
+    let parsed = parse(bytes)?;
+
+    Ok(Layout {
+        strings: parsed.strings,
+        clips: parsed.spans.into_iter().map(|s| ClipSpan { start: s.start, channels_start: s.channels_start, events_start: s.events_start, end: s.end, channel_spans: s.channel_spans }).collect(),
+        version_and_flags: parsed.version_and_flags,
+        fingerprint_and_rest: parsed.fingerprint_and_rest,
+    })
+}
+
+/// Writes a file from a string table and clip records, with the header of the file `layout` was made from: a new fingerprint when one is given, and the skeleton id (which has
+/// to be in the table) or none.
+pub fn assemble(layout: &Layout, strings: &[String], body: &[u8], clips: usize, fingerprint: Option<i32>, skeleton: Option<&str>) -> Vec<u8> {
+    let mut table: Vec<u8> = Vec::new();
+
+    for value in strings {
+        table.extend_from_slice(&(value.len() as u16).to_le_bytes());
+        table.extend_from_slice(value.as_bytes());
+    }
+
+    let mut flags = u16::from_le_bytes([layout.version_and_flags[2], layout.version_and_flags[3]]) & !FLAG_SKELETON_ID;
+    let mut rest = layout.fingerprint_and_rest.clone();
+
+    if let Some(f) = fingerprint {
+        rest[..4].copy_from_slice(&f.to_le_bytes());
+    }
+
+    rest[SKELETON_INDEX_AT - 16..SKELETON_INDEX_AT - 14].copy_from_slice(&[0, 0]);
+
+    if let Some(id) = skeleton {
+        flags |= FLAG_SKELETON_ID;
+        rest[SKELETON_INDEX_AT - 16..SKELETON_INDEX_AT - 14].copy_from_slice(&(strings.iter().position(|s| s == id).unwrap_or(0) as u16).to_le_bytes());
+    }
+
+    let mut out: Vec<u8> = Vec::with_capacity(HEADER_BYTES + table.len() + body.len());
+
+    out.extend_from_slice(MAGIC);
+    out.extend_from_slice(&layout.version_and_flags[..2]);
+    out.extend_from_slice(&flags.to_le_bytes());
+    out.extend_from_slice(&(strings.len() as u16).to_le_bytes());
+    out.extend_from_slice(&(table.len() as u32).to_le_bytes());
+    out.extend_from_slice(&(clips as u16).to_le_bytes());
+    out.extend_from_slice(&rest);
+    out.extend_from_slice(&table);
+    out.extend_from_slice(body);
+    out
 }
 
 /// The events one clip should have after an edit.
