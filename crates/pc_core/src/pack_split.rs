@@ -33,6 +33,9 @@ pub struct Report {
     /// Files left as they were, and why.
     pub skipped: Vec<String>,
     pub findings: Vec<String>,
+    /// The files written and the files removed.
+    pub written: Vec<String>,
+    pub removed: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -314,42 +317,68 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
         }
     }
 
-    /* Partner files and the layout of every scene. */
+    /* Partner files and the layout of every scene. A scene that is already split (an earlier import, or an earlier conversion) keeps what it has: a girl whose partner clips are
+       the ones already there adds nothing, and the layout takes the new girls in. */
     for (scene, parts) in &scenes {
-        let first = &parts.partners[0];
-        let all_same_shared = parts.partners.iter().all(|p| clips_equal(&strut_anim::read(&p.3).unwrap_or_default(), &strut_anim::read(&first.3).unwrap_or_default()));
+        let skeleton_rel = format!("{base}/animations/scenes/{scene}/partner/skeletons/{}.strutanim", id_path(&shared_id));
+        let existing_skeleton = std::fs::read(root.join(&skeleton_rel)).ok().and_then(|b| strut_anim::read(&b).ok());
+        let reference = existing_skeleton.clone().unwrap_or_else(|| strut_anim::read(&parts.partners[0].3).unwrap_or_default());
 
-        if all_same_shared {
-            writes.insert(format!("{base}/animations/scenes/{scene}/partner/skeletons/{}.strutanim", id_path(&shared_id)), first.3.clone());
-        } else {
-            for (owner, by_girl, id, bytes, _) in &parts.partners {
-                let folder = if *by_girl { "owners" } else { "skeletons" };
-                let file = if *by_girl { owner.clone() } else { id_path(id).to_string() };
+        if existing_skeleton.is_none() {
+            writes.insert(skeleton_rel.clone(), parts.partners[0].3.clone());
+        }
 
-                writes.insert(format!("{base}/animations/scenes/{scene}/partner/{folder}/{file}.strutanim"), bytes.clone());
+        let mut differing = 0;
+
+        for (owner, by_girl, id, bytes, _) in &parts.partners {
+            if clips_equal(&strut_anim::read(bytes).unwrap_or_default(), &reference) {
+                continue;
             }
 
-            report.findings.push(format!("The scene {scene} has partner motion that differs from girl to girl, so the partner's clips are written per girl (partner/owners)."));
+            let folder = if *by_girl { "owners" } else { "skeletons" };
+            let file = if *by_girl { owner.clone() } else { id_path(id).to_string() };
+
+            writes.insert(format!("{base}/animations/scenes/{scene}/partner/{folder}/{file}.strutanim"), bytes.clone());
+            differing += 1;
         }
 
-        let hosts: Vec<&String> = parts.hosts.iter().collect();
-        let mut clip_lengths = serde_json::Map::new();
-
-        for clip in &first.4 {
-            let loop_name = ["once", "loop", "hold"].get(clip.loop_mode as usize).copied().unwrap_or("once");
-
-            clip_lengths.insert(clip.name.clone(), serde_json::json!({ "length": (clip.duration * 20.0).round() as u32, "loop": loop_name }));
+        if differing > 0 {
+            report.findings.push(format!("The scene {scene} has partner motion that differs from girl to girl, so {differing} girls' partner clips are written for them alone (partner/owners)."));
         }
 
-        let layout = serde_json::json!({
-            "roles": {
-                "host": { "clipSet": format!("scenes/{scene}/host"), "skeleton": hosts[0], "compatible": hosts[1..], "required": true },
-                "partner": { "clipSet": format!("scenes/{scene}/partner"), "skeleton": shared_id, "required": true }
-            },
-            "clips": clip_lengths
+        let layout_rel = format!("{base}/scenes/{scene}.strutscene");
+        let mut layout: serde_json::Value = std::fs::read(root.join(&layout_rel)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_else(|| {
+            serde_json::json!({
+                "roles": {
+                    "host": { "clipSet": format!("scenes/{scene}/host"), "skeleton": parts.hosts.iter().next(), "compatible": [], "required": true },
+                    "partner": { "clipSet": format!("scenes/{scene}/partner"), "skeleton": shared_id, "required": true }
+                },
+                "clips": {}
+            })
         });
 
-        writes.insert(format!("{base}/scenes/{scene}.strutscene"), serde_json::to_vec_pretty(&layout).unwrap_or_default());
+        if let Some(host) = layout.pointer_mut("/roles/host") {
+            let main = host.get("skeleton").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let mut compatible: Vec<String> = host.get("compatible").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default();
+
+            for id in &parts.hosts {
+                if *id != main && !compatible.contains(id) {
+                    compatible.push(id.clone());
+                }
+            }
+
+            host["compatible"] = serde_json::json!(compatible);
+        }
+
+        if let Some(clips) = layout.get_mut("clips").and_then(|c| c.as_object_mut()) {
+            for clip in &parts.partners[0].4 {
+                let loop_name = ["once", "loop", "hold"].get(clip.loop_mode as usize).copied().unwrap_or("once");
+
+                clips.entry(clip.name.clone()).or_insert_with(|| serde_json::json!({ "length": (clip.duration * 20.0).round() as u32, "loop": loop_name }));
+            }
+        }
+
+        writes.insert(layout_rel, serde_json::to_vec_pretty(&layout).unwrap_or_default());
         report.scenes += 1;
     }
 
@@ -375,6 +404,8 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
 
     report.files_written = writes.len();
     report.files_removed = deletes.len();
+    report.written = writes.keys().cloned().collect();
+    report.removed = deletes.clone();
 
     if !apply {
         return Ok(report);
@@ -542,6 +573,11 @@ mod tests {
                 }
             }
         }
+
+        /* Running it again finds nothing left to convert. */
+        let again = split_pack(&copy, true).unwrap();
+
+        assert_eq!((again.scenes, again.files_written, again.models_stripped), (0, 0, 0), "a second run changed {:?}", again.written);
 
         let undone = undo_split(&copy, done.stamp.as_deref().unwrap()).unwrap();
 

@@ -1448,6 +1448,33 @@ fn import_old_pack(app: State<App>, pack: String, jobs: Vec<GirlJob>, liquid: bo
     Ok(())
     })?;
 
+    /* The last pass: what was brought in carries the old partner rig in the girls' models and scene files, so the pack is converted to the new scene system (one model per
+       participant), in place. The partner is the base mod's own, so the old rig is not kept. */
+    match pc_core::pack_split::split_pack(&root, true) {
+        Ok(split) => {
+            use pc_core::import::Level;
+
+            if split.scenes > 0 || split.models_stripped > 0 {
+                result.notes.push(Note { level: Level::Changed, message: format!("Converted to the new scene system: {} scenes now have a layout, the girls' scene animations are split into the girl's clips and the partner's, and the old partner rig was taken out of {} models.", split.scenes, split.models_stripped) });
+            }
+
+            if !split.dropped_bones.is_empty() {
+                result.notes.push(Note { level: Level::Dropped, message: format!("Animation of old partner bones with no counterpart in the new partner model was left out: {}.", split.dropped_bones.iter().map(|(b, n)| format!("{b} ({n} files)")).collect::<Vec<_>>().join(", ")) });
+            }
+
+            if !split.approximate.is_empty() {
+                result.notes.push(Note { level: Level::Review, message: format!("These partner bones only come close to where they were, because the new partner model differs: {}. Check the scenes in the viewer.", split.approximate.iter().map(|(b, by)| format!("{b} (up to {by:.2} off)")).collect::<Vec<_>>().join(", ")) });
+            }
+
+            for skipped in &split.skipped {
+                result.notes.push(Note { level: Level::Review, message: format!("Left in the old form: {skipped}") });
+            }
+
+            result.written.extend(split.written);
+        }
+        Err(error) => result.notes.push(Note { level: pc_core::import::Level::Error, message: format!("The pack could not be converted to the new scene system: {}", text_of(error)) }),
+    }
+
     Ok(result)
 }
 
