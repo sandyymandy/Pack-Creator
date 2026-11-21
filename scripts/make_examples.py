@@ -30,10 +30,16 @@ def add(z, base, rel, prefix):
 
 with zipfile.ZipFile(OUT, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
     for girl in GIRLS:
-        for rel in [f'strut/models/entities/girls/nude/{girl}.strutmodel', f'strut/models/entities/girls/dressed/{girl}.strutmodel', f'textures/entities/{girl}.png', f'strut/event_bindings/girls/{girl}.json']:
+        for rel in [f'strut/models/entities/girls/nude/{girl}.strutmodel', f'strut/models/entities/girls/dressed/{girl}.strutmodel', f'textures/entities/{girl}.png']:
             add(z, ASSETS, rel, 'assets/pleasurehorizons')
 
         add(z, DATA, f'girls/{girl}.json', 'data/pleasurehorizons')
+
+    add(z, ASSETS, 'textures/entities/male.png', 'assets/pleasurehorizons')
+
+    for root, _, files in os.walk(os.path.join(ASSETS, 'strut', 'event_bindings')):
+        for name in files:
+            add(z, ASSETS, os.path.relpath(os.path.join(root, name), ASSETS).replace(os.sep, '/'), 'assets/pleasurehorizons')
 
     for root, _, files in os.walk(os.path.join(ASSETS, 'strut', 'animations')):
         for name in files:

@@ -63,6 +63,44 @@ fn data_dir() -> PathBuf {
     base.join("PleasureHorizonsPackCreator").join("blockbench")
 }
 
+/// Where the actor presets are written: one folder for each source (the base mod's characters, a pack's), each with a `presets.json` the Strut Toolkit reads.
+pub fn actors_dir() -> PathBuf {
+    data_dir().join("actors")
+}
+
+/// The preset folders there are, as the toolkit is told of them.
+pub fn actor_folders() -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(actors_dir()) else { return Vec::new() };
+    let mut found: Vec<String> = entries.flatten().filter(|e| e.path().join("presets.json").is_file()).map(|e| e.path().display().to_string().replace('\\', "/")).collect();
+
+    found.sort();
+    found
+}
+
+/// Tells a Blockbench that is open where the preset folders are (one that is not open is told the next time the Pack Creator opens it). Never starts Blockbench.
+pub fn announce_actors() -> Result<(), String> {
+    if !(bridge_alive() || pages().is_some()) {
+        return Err("Blockbench is not open".into());
+    }
+
+    let reply = deliver(reach()?, ANNOUNCE, &json!({ "actorFolders": actor_folders() }))?;
+
+    if reply == "ok" { Ok(()) } else { Err(reply) }
+}
+
+/// Puts the preset folders in Blockbench's storage, where the toolkit looks for them. What an earlier run registered under the Pack Creator's folder is replaced; a folder a
+/// person added by hand stays.
+const ANNOUNCE: &str = r#"(async (job) => {
+  try {
+    const key = 'strut_actor_preset_folders';
+    let have = [];
+    try { have = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { have = []; }
+    const ours = p => String(p).split('\\').join('/').indexOf('/PleasureHorizonsPackCreator/blockbench/actors/') >= 0;
+    localStorage.setItem(key, JSON.stringify([...have.filter(p => !ours(p)), ...(job.actorFolders || [])]));
+  } catch (e) { return 'The preset folders could not be registered: ' + e; }
+  return 'ok';
+})"#;
+
 fn plugin_dir() -> PathBuf {
     data_dir().join("plugin")
 }
@@ -563,6 +601,14 @@ const SCRIPT: &str = r#"(async (job) => {
     try { localStorage.setItem('pc_strut_tag', job.tag); } catch (e) { /* no storage */ }
   }
 
+  try {
+    const key = 'strut_actor_preset_folders';
+    let have = [];
+    try { have = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { have = []; }
+    const ours = p => String(p).split('\\').join('/').indexOf('/PleasureHorizonsPackCreator/blockbench/actors/') >= 0;
+    localStorage.setItem(key, JSON.stringify([...have.filter(p => !ours(p)), ...(job.actorFolders || [])]));
+  } catch (e) { /* no storage: the toolkit is told again next time */ }
+
   const link = Plugins.all.find(p => p.id === 'pc_bridge');
 
   if (!link || !link.installed || link.version !== job.bridgeVersion) {
@@ -656,6 +702,7 @@ fn plugin_data() -> Result<Value, String> {
         "bridge": bridge.display().to_string().replace('\\', "/"),
         "tag": installed_marker(),
         "bridgeVersion": BRIDGE_VERSION,
+        "actorFolders": actor_folders(),
     }))
 }
 

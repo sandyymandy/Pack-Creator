@@ -1,4 +1,4 @@
-import type { MigrationStatus, SplitReport, SkeletonPlan, SkeletonWritten, SceneScope, GirlLook, ScenePlan, ArmFixReport, SearchHit, SimFiles, SimGirl, BlockbenchStatus, FileVersion, GameLogView, ClipData, CueEvent, ModelData, ViewerFiles, ImportResult, Choices, Reference, Content, Diagnostic, Entry, Located, NewFile, NewProject, Opened, RecentView, Written } from './types';
+import type { ActorSummary, MigrationStatus, SplitReport, SkeletonPlan, SkeletonWritten, SceneScope, GirlLook, ScenePlan, ArmFixReport, SearchHit, SimFiles, SimGirl, BlockbenchStatus, FileVersion, GameLogView, ClipData, CueEvent, ModelData, ViewerFiles, ImportResult, Choices, Reference, Content, Diagnostic, Entry, Located, NewFile, NewProject, Opened, RecentView, Written } from './types';
 import { mock } from './mock';
 
 /** Whether the page runs inside the Pack Creator's window. In a plain browser (for developing the page) a small in-memory stand-in answers instead. */
@@ -96,6 +96,7 @@ export const api = {
   blockbenchStatus: () => call<BlockbenchStatus>('blockbench_status'),
   installBlockbench: () => call<void>('install_blockbench'),
   prepareBlockbench: () => call<void>('prepare_blockbench'),
+  registerActors: (girls: string[], withPack: boolean) => call<ActorSummary>('register_actors', { girls, withPack }),
   updateToolkit: () => call<string>('update_toolkit'),
   openInBlockbench: (model: string, texture: string | null, animation: string | null) => call<void>('open_in_blockbench', { model, texture, animation }),
   importProfile: (path: string, bodyType: string) => call<ImportResult>('import_profile', { path, bodyType }),

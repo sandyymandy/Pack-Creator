@@ -4,6 +4,7 @@
 //!
 //! The page never names a place on disk after the project is opened: it names files relative to the project, and `pc_core` refuses anything that leaves it.
 
+mod actors;
 mod blockbench;
 mod clipboard;
 mod examples;
@@ -1213,6 +1214,15 @@ async fn update_toolkit() -> Reply<String> {
     tauri::async_runtime::spawn_blocking(blockbench::update_plugin).await.map_err(text)?
 }
 
+/// Writes the actor presets the Strut Toolkit's animation workspace offers: the base mod's characters and the male, and the characters of the open pack (all of them when `girls`
+/// is empty, otherwise the ones named; none when `with_pack` is false). A Blockbench that is open is told at once.
+#[tauri::command]
+async fn register_actors(app: State<'_, App>, girls: Vec<String>, with_pack: bool) -> Reply<actors::Summary> {
+    let opened = if with_pack { Some(app.open()?) } else { None };
+
+    tauri::async_runtime::spawn_blocking(move || actors::register(opened.as_ref().map(|(root, meta)| (root.as_path(), meta)), &girls)).await.map_err(text)?
+}
+
 /// Opens a model (with the texture, and an animation file on it when one is given) in Blockbench. The files are named relative to the project.
 #[tauri::command]
 async fn open_in_blockbench(app: State<'_, App>, model: String, texture: Option<String>, animation: Option<String>) -> Reply<()> {
@@ -1739,6 +1749,7 @@ fn main() {
             install_blockbench,
             prepare_blockbench,
             update_toolkit,
+            register_actors,
             open_in_blockbench,
             cue_names,
             old_pack_girls,
