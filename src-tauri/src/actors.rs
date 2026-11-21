@@ -11,6 +11,9 @@ use std::path::{Path, PathBuf};
 
 const BASE_FOLDER: &str = "base-game";
 
+/// The skin the male is drawn with in the Pack Creator (the player's own skin), which is what he wears as an actor too. The base mod's `male.png` only covers his own parts.
+const MALE_SKIN: &[u8] = include_bytes!("../resources/male_skin.png");
+
 #[derive(Serialize, Default)]
 pub struct Summary {
     pub base: usize,
@@ -121,7 +124,7 @@ fn write_base_into(path: PathBuf) -> Result<usize, String> {
         }
     }
 
-    folder.add("male", "Male (the player)", "Male", "male", pc_core::scene_split::MALE_ID, pc_core::scene_split::male_model_bytes(), texture("male").as_deref())?;
+    folder.add("male", "Male (the player)", "Male", "male", pc_core::scene_split::MALE_ID, pc_core::scene_split::male_model_bytes(), Some(MALE_SKIN))?;
     folder.finish()
 }
 
