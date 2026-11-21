@@ -176,15 +176,19 @@ fn move_files(root: &Path) -> Result<(usize, Vec<String>)> {
 }
 
 pub fn status(root: &Path, meta: &ProjectMeta) -> Status {
-    let old_rig = has_old_male(root) || !legacy_files(root).is_empty() || !files_to_move(root).is_empty();
+    let rig = has_old_male(root);
+    let renames = !legacy_files(root).is_empty();
+    let moves = !files_to_move(root).is_empty();
+    let old_rig = rig || renames || moves;
     let needed = meta.format < CURRENT || old_rig;
 
     Status {
         format: meta.format,
         current: CURRENT,
         needed,
-        reason: (old_rig && meta.format >= CURRENT).then(|| "Some models still carry the old male rig.".to_string()),
-        steps: STEPS.iter().filter(|s| s.to > meta.format || old_rig).cloned().collect(),
+        reason: (old_rig && meta.format >= CURRENT).then(|| "Some files are still in the form of an older format.".to_string()),
+        /* Only the steps that have something to do in this pack are listed. */
+        steps: STEPS.iter().filter(|s| if s.to == 3 { moves } else { rig || renames }).cloned().collect(),
         newer: meta.format > CURRENT,
     }
 }

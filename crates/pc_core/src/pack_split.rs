@@ -113,7 +113,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
     }
 
     if models.is_empty() {
-        report.findings.push("No model in this pack carries the male rig (steve): there is nothing to split.".into());
+        report.findings.push("No scenes need splitting: no model carries the old male rig (steve).".into());
         return Ok(report);
     }
 

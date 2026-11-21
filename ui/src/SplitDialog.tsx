@@ -55,8 +55,13 @@ export function SplitDialog({ onClose }: { onClose: () => void }) {
       {shown && (
         <div style="max-height:55vh;overflow:auto">
           <p style="margin:0 0 8px">
-            {done ? 'Done: ' : 'This would convert '}
-            <strong>{shown.scenes}</strong> scenes, write {shown.files_written} files, replace {shown.files_removed} old scene files and take the male rig out of {shown.models_stripped} models.
+            {done ? 'Done: ' : 'This would '}
+            {[
+              shown.scenes > 0 ? `convert ${shown.scenes} scenes` : '',
+              shown.files_removed > 0 ? `replace ${shown.files_removed} old scene files` : '',
+              shown.models_stripped > 0 ? `take the male rig out of ${shown.models_stripped} models` : '',
+              shown.files_written > 0 ? `write or move ${shown.files_written} files` : ''
+            ].filter(Boolean).join(', ') || 'change nothing in the files, only the pack\'s format number'}.
           </p>
           {shown.dropped_bones.length > 0 && <details><summary>{shown.dropped_bones.length} old male bones have no counterpart (their animation is dropped)</summary>{shown.dropped_bones.map(([bone, files]) => <p class="muted" key={bone} style="margin:2px 0">{bone}: animated in {files} files</p>)}</details>}
           {shown.approximate.length > 0 && <details><summary>{shown.approximate.length} male bones are mapped as closely as the new model allows</summary>{shown.approximate.map(([bone, by]) => <p class="muted" key={bone} style="margin:2px 0">{bone}: up to {by.toFixed(2)} off</p>)}</details>}
@@ -67,7 +72,7 @@ export function SplitDialog({ onClose }: { onClose: () => void }) {
       <div class="foot">
         <button class="btn ghost" onClick={onClose}>Close</button>
         {done?.stamp && <button class="btn" disabled={busy} onClick={() => void undo()}>Undo</button>}
-        {!done && <button class="btn primary" disabled={busy || !report || report.scenes === 0} onClick={() => void run()}>Convert in place</button>}
+        {!done && <button class="btn primary" disabled={busy || !report} onClick={() => void run()}>Update the pack</button>}
       </div>
     </Dialog>
   );
