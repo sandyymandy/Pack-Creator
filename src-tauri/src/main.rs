@@ -631,6 +631,12 @@ fn bundled_bed() -> Reply<BundledModel> {
     Ok(BundledModel { model, texture: format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(include_bytes!("../resources/girl_bed.png"))) })
 }
 
+/// The base mod's partner model, which every scene of the new layout plays together with the girl.
+#[tauri::command(async)]
+fn bundled_partner() -> pc_core::strut_model::Model {
+    pc_core::scene_split::partner_model()
+}
+
 #[derive(Serialize)]
 struct SimGirl {
     id: String,
@@ -720,8 +726,17 @@ struct SimFiles {
     texture: Option<String>,
     /// The animation files she plays a scene from, in the game's lookup order (hers for the scene, the shared one, her base file, the shared base).
     animations: Vec<String>,
+    /// For a scene in the new layout (one with a layout file): the partner's clip files, in the order they are looked up. Empty for a scene that is not split.
+    partner_animations: Vec<String>,
     bindings: Option<String>,
     sounds_json: Vec<String>,
+}
+
+/// The path of the skeleton a girl's model carries (`jenny` for `pleasurehorizons:jenny`): from the model's own id, or her body type when it has none.
+fn skeleton_path(root: &std::path::Path, from_zip: bool, model: Option<String>, body_type: Option<&str>) -> Option<String> {
+    let from_model = (!from_zip).then_some(()).and(model).and_then(|rel| std::fs::read(root.join(rel)).ok()).and_then(|b| pc_core::strut_model::read(&b).ok()).and_then(|m| m.skeleton_id);
+
+    from_model.map(|id| id.split_once(':').map_or(id.clone(), |(_, p)| p.to_string())).or_else(|| body_type.filter(|b| !b.is_empty()).map(str::to_string))
 }
 
 /// The files of one girl that a simulation of one scene needs.
@@ -746,7 +761,28 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
 
     /* The files the game looks a clip up in, in its order: her own file of the scene, the file for her skeleton (her body type: `<scene>.<skeleton>.strutanim`), the shared file of the
        scene, then her base file and the shared base. Her own beats her skeleton's, which beats the shared one. */
-    let mut order = vec![format!("/strut/animations/scenes/{scene_id}-{girl_id}.strutanim")];
+    /* A scene in the new layout has a layout file and a folder for each role: the girl's clips come from her own file, then her skeleton's; the partner's from the file made for
+       her (when the partner moves differently with her), then the partner's. */
+    let mut partner_animations = Vec::new();
+    let mut order = Vec::new();
+
+    if find(format!("/strut/scenes/{scene_id}.strutscene")).is_some() {
+        let skeleton = skeleton_path(&root, from_zip, find(format!("/strut/models/nude/{girl_id}.strutmodel")).or_else(|| find(format!("/strut/models/dressed/{girl_id}.strutmodel"))), body_type.as_deref());
+
+        order.push(format!("/strut/animations/scenes/{scene_id}/host/owners/{girl_id}.strutanim"));
+
+        if let Some(skeleton) = skeleton {
+            order.push(format!("/strut/animations/scenes/{scene_id}/host/skeletons/{skeleton}.strutanim"));
+        }
+
+        for suffix in [format!("/strut/animations/scenes/{scene_id}/partner/owners/{girl_id}.strutanim"), format!("/strut/animations/scenes/{scene_id}/partner/skeletons/partner.strutanim")] {
+            if let Some(found) = find(suffix) {
+                partner_animations.push(found);
+            }
+        }
+    }
+
+    order.push(format!("/strut/animations/scenes/{scene_id}-{girl_id}.strutanim"));
 
     if let Some(body) = body_type.as_deref().filter(|body| !body.is_empty()) {
         order.push(format!("/strut/animations/scenes/{scene_id}.{body}.strutanim"));
@@ -784,6 +820,7 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
         dressed: find(format!("/strut/models/dressed/{girl_id}.strutmodel")),
         texture: find(format!("/textures/entities/{girl_id}.png")),
         animations,
+        partner_animations,
         bindings: find(format!("/strut/event_bindings/girls/{girl_id}.json")),
         sounds_json,
     })
@@ -1670,6 +1707,7 @@ fn main() {
             example_girls,
             example_scenes,
             bundled_bed,
+            bundled_partner,
             sim_files,
             read_asset,
             read_game_log,

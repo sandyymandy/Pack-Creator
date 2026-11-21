@@ -226,7 +226,7 @@ export async function mock(command: string, args: Args = {}): Promise<unknown> {
     case 'sim_girls': return delay([{ id: 'amber', file: 'data/pleasurehorizons/girls/amber.json', body_type: 'jenny', example: false, has_model: true }]);
     case 'example_girls': return delay([{ id: 'lucy', file: 'example:data/pleasurehorizons/girls/lucy.json', body_type: 'jenny', example: true, has_model: true }]);
     case 'example_scenes': return delay([{ id: 'doggy', file: 'example:data/pleasurehorizons/scenes/doggy.json' }]);
-    case 'sim_files': return delay({ nude: null, dressed: null, texture: null, animations: [], bindings: null, sounds_json: [] });
+    case 'sim_files': return delay({ nude: null, dressed: null, texture: null, animations: [], partner_animations: [], bindings: null, sounds_json: [] });
     case 'read_asset': return delay('');
     case 'cue_names': return delay(['pound', 'moan', 'thrust', 'cum']);
     case 'save_clip_events': return delay([]);

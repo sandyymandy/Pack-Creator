@@ -72,6 +72,7 @@ export const api = {
   sceneMakeGirlSpecific: (scene: string, girl: string, keepOriginal: boolean) => call<string[]>('scene_make_girl_specific', { scene, girl, keepOriginal }),
   saveClipEvents: (rel: string, clip: string, events: CueEvent[]) => call<ClipData[]>('save_clip_events', { rel, clip, events }),
   cueNames: () => call<string[]>('cue_names'),
+  bundledPartner: () => call<ModelData>('bundled_partner'),
   bundledBed: () => call<{ model: ModelData; texture: string }>('bundled_bed'),
   checkGirlModels: (bodyType: string, nude: string | null, dressed: string | null, texture: string | null) => call<unknown>('check_girl_models', { bodyType, nude, dressed, texture }),
   createGirl: (request: { id: string; name: string; archetype: string; body_type: string; tame_item: string; nude: string; dressed: string; texture: string; physics: boolean }) => call<{ girl: string; written: string[]; notes: string[] }>('create_girl', { request }),

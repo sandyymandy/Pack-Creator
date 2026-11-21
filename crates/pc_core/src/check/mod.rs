@@ -8,6 +8,7 @@ mod bones;
 pub mod cues;
 mod girl;
 mod misc;
+mod roles;
 mod scene;
 mod social;
 mod trait_file;
@@ -245,6 +246,8 @@ pub fn check_project(root: &Path, reference: &Reference) -> Vec<Diagnostic> {
         }
     }
 
+    found.extend(roles::check(root, &facts));
+
     found
 }
 
@@ -262,7 +265,9 @@ fn scene_animation(scene_file: &str, id: &str, facts: &PackFacts) -> Vec<Diagnos
         let in_scenes = path.contains(&format!("/{ASSET_SYNC}/strut/animations/scenes/"));
         let name = path.rsplit('/').next().unwrap_or("");
 
-        in_scenes && name.ends_with(".strutanim") && (name.starts_with(&format!("{id}.")) || name.starts_with(&format!("{id}-")))
+        let split = path.contains(&format!("/{ASSET_SYNC}/strut/animations/scenes/{id}/")) || path.ends_with(&format!("/{ASSET_SYNC}/strut/scenes/{id}.strutscene"));
+
+        split || (in_scenes && name.ends_with(".strutanim") && (name.starts_with(&format!("{id}.")) || name.starts_with(&format!("{id}-"))))
     });
 
     if has {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { api } from '../api';
+import { withPartner, withPartnerClips } from './partner';
 import { messageOf, notify } from '../notify';
 import { getSettings, keyName } from '../settings';
 import type { ClipData, ModelData, SimFiles, SimGirl } from '../types';
@@ -118,13 +119,20 @@ async function readJson(rel: string | null | undefined): Promise<Record<string, 
 
 async function loadAssets(sceneId: string, girlId: string, example: boolean, bodyType: string | null): Promise<Assets> {
   const files = await api.simFiles(sceneId, girlId, example, bodyType);
-  const [nude, dressed, textureUrl, animations, bindingsFile] = await Promise.all([
+  const [girlNude, girlDressed, textureUrl, ownAnimations, partnerFiles, bindingsFile] = await Promise.all([
     files.nude ? api.readModel(files.nude).catch(() => null) : Promise.resolve(null),
     files.dressed ? api.readModel(files.dressed).catch(() => null) : Promise.resolve(null),
     files.texture ? api.readImage(files.texture).catch(() => null) : Promise.resolve(null),
     Promise.all(files.animations.map(async path => ({ path, clips: await api.readAnimation(path).catch(() => [] as ClipData[]) }))),
+    Promise.all((files.partner_animations ?? []).map(async path => ({ path, clips: await api.readAnimation(path).catch(() => [] as ClipData[]) }))),
     readJson(files.bindings)
   ]);
+
+  /* A scene in the new layout plays the girl and the partner together: the partner's model and clips are joined to hers for drawing. */
+  const partner = partnerFiles.length > 0 ? await api.bundledPartner().catch(() => null) : null;
+  const nude = girlNude && partner ? withPartner(girlNude, partner) : girlNude;
+  const dressed = girlDressed && partner ? withPartner(girlDressed, partner) : girlDressed;
+  const animations = partner ? withPartnerClips(ownAnimations, partnerFiles, partner) : ownAnimations;
 
   const sounds: Record<string, string[]> = {};
 
