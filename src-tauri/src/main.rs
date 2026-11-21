@@ -974,7 +974,16 @@ fn skeleton_apply(app: State<App>, choices: std::collections::BTreeMap<String, S
 fn split_scenes(app: State<App>, apply: bool) -> Reply<pc_core::pack_split::Report> {
     let (root, _) = app.open()?;
 
-    pc_core::pack_split::split_pack(&root, apply).map_err(text)
+    pc_core::migrate::update(&root, apply).map_err(text)
+}
+
+/// Whether the pack is in an older format than this tool writes, and what updating it would do.
+#[tauri::command(async)]
+fn migration_status(app: State<App>) -> Reply<pc_core::migrate::Status> {
+    let (root, _) = app.open()?;
+    let meta = project::open(&root).map_err(text)?;
+
+    Ok(pc_core::migrate::status(&root, &meta))
 }
 
 /// Puts back what a conversion (named by its stamp) changed.
@@ -1623,6 +1632,7 @@ fn main() {
             skeleton_plan,
             skeleton_apply,
             split_scenes,
+            migration_status,
             undo_split_scenes,
             file_history,
             read_version,

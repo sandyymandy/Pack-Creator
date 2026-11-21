@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { api } from './api';
 import { Dialog } from './Dialogs';
 import { messageOf, notify } from './notify';
-import type { SplitReport } from './types';
+import type { MigrationStatus, SplitReport } from './types';
 
 /**
  * Splitting scenes: each girl's model carries the partner as a second rig that her scene animations also move. This takes that rig out into a model of its own, writes each scene as
@@ -13,7 +13,9 @@ export function SplitDialog({ onClose }: { onClose: () => void }) {
   const [report, setReport] = useState<SplitReport | null>(null);
   const [done, setDone] = useState<SplitReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<MigrationStatus | null>(null);
 
+  useEffect(() => { void api.migrationStatus().then(setStatus).catch(() => undefined); }, [done]);
   useEffect(() => { void api.splitScenes(false).then(setReport).catch(error => notify(messageOf(error))); }, []);
 
   const run = async () => {
@@ -47,7 +49,8 @@ export function SplitDialog({ onClose }: { onClose: () => void }) {
   const shown = done ?? report;
 
   return (
-    <Dialog title="Split scenes" onClose={onClose}>
+    <Dialog title="Update this pack" onClose={onClose}>
+      {status && <p class="muted" style="margin:0 0 8px">This pack is in format {status.format}; this version writes format {status.current}.{status.reason ? ` ${status.reason}` : ''}{status.newer ? ' It was made by a newer tool: update the Pack Creator before changing it.' : ''}{status.steps.map(step => <span key={step.to}><br /><strong>{step.title}.</strong> {step.detail}</span>)}</p>}
       {!shown && <p class="muted">Looking at the pack...</p>}
       {shown && (
         <div style="max-height:55vh;overflow:auto">

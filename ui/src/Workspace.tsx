@@ -139,6 +139,9 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
 
   sizesRef.current = sizes;
   const [dialog, setDialog] = useState<Dialog>(null);
+
+  /* A pack in an older format is offered its update as soon as it opens. */
+  useEffect(() => { void api.migrationStatus().then(status => { if (status.needed) setDialog({ type: 'split' }); }).catch(() => undefined); }, []);
   const [menu, setMenu] = useState<{ x: number; y: number; entry: Entry | null } | null>(null);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [view, setView] = useState<'form' | 'json'>(readView);

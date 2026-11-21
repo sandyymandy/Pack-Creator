@@ -9,7 +9,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const META_DIR: &str = ".packcreator";
 pub const META_FILE: &str = "project.json";
-const FORMAT: u32 = 1;
+/// The format a new pack is made in (see `migrate`).
+const FORMAT: u32 = crate::migrate::CURRENT;
 
 /// What a pack can hold. A pack may hold any of them, one of them or none yet.
 pub const CONTENTS: [(&str, &str); 5] = [

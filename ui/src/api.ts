@@ -1,4 +1,4 @@
-import type { SplitReport, SkeletonPlan, SkeletonWritten, SceneScope, GirlLook, ScenePlan, ArmFixReport, SearchHit, SimFiles, SimGirl, BlockbenchStatus, FileVersion, GameLogView, ClipData, CueEvent, ModelData, ViewerFiles, ImportResult, Choices, Reference, Content, Diagnostic, Entry, Located, NewFile, NewProject, Opened, RecentView, Written } from './types';
+import type { MigrationStatus, SplitReport, SkeletonPlan, SkeletonWritten, SceneScope, GirlLook, ScenePlan, ArmFixReport, SearchHit, SimFiles, SimGirl, BlockbenchStatus, FileVersion, GameLogView, ClipData, CueEvent, ModelData, ViewerFiles, ImportResult, Choices, Reference, Content, Diagnostic, Entry, Located, NewFile, NewProject, Opened, RecentView, Written } from './types';
 import { mock } from './mock';
 
 /** Whether the page runs inside the Pack Creator's window. In a plain browser (for developing the page) a small in-memory stand-in answers instead. */
@@ -59,6 +59,7 @@ export const api = {
   readModel: (rel: string) => call<ModelData>('read_model', { rel }),
   skeletonPlan: (choices: Record<string, string>) => call<SkeletonPlan>('skeleton_plan', { choices }),
   skeletonApply: (choices: Record<string, string>) => call<SkeletonWritten>('skeleton_apply', { choices }),
+  migrationStatus: () => call<MigrationStatus>('migration_status'),
   splitScenes: (apply: boolean) => call<SplitReport>('split_scenes', { apply }),
   undoSplitScenes: (stamp: string) => call<number>('undo_split_scenes', { stamp }),
   fixArms: (rel: string, apply: boolean) => call<ArmFixReport>('fix_arms', { rel, apply }),
