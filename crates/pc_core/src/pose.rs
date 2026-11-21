@@ -352,7 +352,7 @@ mod compare_probe {
 mod usage_probe {
     #[test]
     #[ignore]
-    fn partner_channels() {
+    fn male_channels() {
         let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test_pack/data/pleasurehorizons/asset_sync/strut/animations/scenes");
         let m = crate::strut_model::read(&std::fs::read(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test_pack/data/pleasurehorizons/asset_sync/strut/models/nude/jenny.strutmodel")).unwrap()).unwrap();
         let steve: std::collections::HashSet<String> = crate::scene_split::subtree(&m, "steve").into_iter().map(|i| m.group_bones[i].name.clone()).collect();

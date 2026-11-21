@@ -270,7 +270,7 @@ export function Viewer({ rel }: { rel: string }) {
         </select>
         <label class="check-inline" title="How bright the model is"><span class="muted">Brightness</span> <input type="range" class="bright" min={0.2} max={2} step={0.05} value={brightness} onInput={e => setBrightness(Number((e.target as HTMLInputElement).value))} /></label>
         <label class="check-inline"><input type="checkbox" checked={grid} onChange={e => setGrid((e.target as HTMLInputElement).checked)} /> Grid</label>
-        <label class="check-inline" title="The scene rig: the partner's body, items, armour and cameras"><input type="checkbox" checked={!rigHidden} onChange={e => setRigHidden(!(e.target as HTMLInputElement).checked)} /> Scene rig</label>
+        <label class="check-inline" title="The scene rig: the male's body, items, armour and cameras"><input type="checkbox" checked={!rigHidden} onChange={e => setRigHidden(!(e.target as HTMLInputElement).checked)} /> Scene rig</label>
         <span class="muted">{info}</span>
       </div>
 

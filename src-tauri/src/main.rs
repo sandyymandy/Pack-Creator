@@ -631,10 +631,10 @@ fn bundled_bed() -> Reply<BundledModel> {
     Ok(BundledModel { model, texture: format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(include_bytes!("../resources/girl_bed.png"))) })
 }
 
-/// The base mod's partner model, which every scene of the new layout plays together with the girl.
+/// The base mod's male model, which every scene of the new layout plays together with the girl.
 #[tauri::command(async)]
-fn bundled_partner() -> pc_core::strut_model::Model {
-    pc_core::scene_split::partner_model()
+fn bundled_male() -> pc_core::strut_model::Model {
+    pc_core::scene_split::male_model()
 }
 
 #[derive(Serialize)]
@@ -726,8 +726,8 @@ struct SimFiles {
     texture: Option<String>,
     /// The animation files she plays a scene from, in the game's lookup order (hers for the scene, the shared one, her base file, the shared base).
     animations: Vec<String>,
-    /// For a scene in the new layout (one with a layout file): the partner's clip files, in the order they are looked up. Empty for a scene that is not split.
-    partner_animations: Vec<String>,
+    /// For a scene in the new layout (one with a layout file): the male's clip files, in the order they are looked up. Empty for a scene that is not split.
+    male_animations: Vec<String>,
     bindings: Option<String>,
     sounds_json: Vec<String>,
 }
@@ -761,9 +761,9 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
 
     /* The files the game looks a clip up in, in its order: her own file of the scene, the file for her skeleton (her body type: `<scene>.<skeleton>.strutanim`), the shared file of the
        scene, then her base file and the shared base. Her own beats her skeleton's, which beats the shared one. */
-    /* A scene in the new layout has a layout file and a folder for each role: the girl's clips come from her own file, then her skeleton's; the partner's from the file made for
-       her (when the partner moves differently with her), then the partner's. */
-    let mut partner_animations = Vec::new();
+    /* A scene in the new layout has a layout file and a folder for each role: the girl's clips come from her own file, then her skeleton's; the male's from the file made for
+       her (when the male moves differently with her), then the male's. */
+    let mut male_animations = Vec::new();
     let mut order = Vec::new();
 
     if find(format!("/strut/scenes/{scene_id}.strutscene")).is_some() {
@@ -775,9 +775,9 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
             order.push(format!("/strut/animations/scenes/{scene_id}/host/skeletons/{skeleton}.strutanim"));
         }
 
-        for suffix in [format!("/strut/animations/scenes/{scene_id}/partner/owners/{girl_id}.strutanim"), format!("/strut/animations/scenes/{scene_id}/partner/skeletons/partner.strutanim")] {
+        for suffix in [format!("/strut/animations/scenes/{scene_id}/male/owners/{girl_id}.strutanim"), format!("/strut/animations/scenes/{scene_id}/male/skeletons/male.strutanim")] {
             if let Some(found) = find(suffix) {
-                partner_animations.push(found);
+                male_animations.push(found);
             }
         }
     }
@@ -820,7 +820,7 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
         dressed: find(format!("/strut/models/dressed/{girl_id}.strutmodel")),
         texture: find(format!("/textures/entities/{girl_id}.png")),
         animations,
-        partner_animations,
+        male_animations,
         bindings: find(format!("/strut/event_bindings/girls/{girl_id}.json")),
         sounds_json,
     })
@@ -1494,22 +1494,22 @@ fn import_old_pack(app: State<App>, pack: String, jobs: Vec<GirlJob>, liquid: bo
     Ok(())
     })?;
 
-    /* The last pass: what was brought in carries the old partner rig in the girls' models and scene files, so the pack is converted to the new scene system (one model per
-       participant), in place. The partner is the base mod's own, so the old rig is not kept. */
+    /* The last pass: what was brought in carries the old male rig in the girls' models and scene files, so the pack is converted to the new scene system (one model per
+       participant), in place. The male is the base mod's own, so the old rig is not kept. */
     match pc_core::pack_split::split_pack(&root, true) {
         Ok(split) => {
             use pc_core::import::Level;
 
             if split.scenes > 0 || split.models_stripped > 0 {
-                result.notes.push(Note { level: Level::Changed, message: format!("Converted to the new scene system: {} scenes now have a layout, the girls' scene animations are split into the girl's clips and the partner's, and the old partner rig was taken out of {} models.", split.scenes, split.models_stripped) });
+                result.notes.push(Note { level: Level::Changed, message: format!("Converted to the new scene system: {} scenes now have a layout, the girls' scene animations are split into the girl's clips and the male's, and the old male rig was taken out of {} models.", split.scenes, split.models_stripped) });
             }
 
             if !split.dropped_bones.is_empty() {
-                result.notes.push(Note { level: Level::Dropped, message: format!("Animation of old partner bones with no counterpart in the new partner model was left out: {}.", split.dropped_bones.iter().map(|(b, n)| format!("{b} ({n} files)")).collect::<Vec<_>>().join(", ")) });
+                result.notes.push(Note { level: Level::Dropped, message: format!("Animation of old male bones with no counterpart in the new male model was left out: {}.", split.dropped_bones.iter().map(|(b, n)| format!("{b} ({n} files)")).collect::<Vec<_>>().join(", ")) });
             }
 
             if !split.approximate.is_empty() {
-                result.notes.push(Note { level: Level::Review, message: format!("These partner bones only come close to where they were, because the new partner model differs: {}. Check the scenes in the viewer.", split.approximate.iter().map(|(b, by)| format!("{b} (up to {by:.2} off)")).collect::<Vec<_>>().join(", ")) });
+                result.notes.push(Note { level: Level::Review, message: format!("These male bones only come close to where they were, because the new male model differs: {}. Check the scenes in the viewer.", split.approximate.iter().map(|(b, by)| format!("{b} (up to {by:.2} off)")).collect::<Vec<_>>().join(", ")) });
             }
 
             for skipped in &split.skipped {
@@ -1707,7 +1707,7 @@ fn main() {
             example_girls,
             example_scenes,
             bundled_bed,
-            bundled_partner,
+            bundled_male,
             sim_files,
             read_asset,
             read_game_log,

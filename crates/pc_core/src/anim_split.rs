@@ -1,5 +1,5 @@
-//! Splitting one scene's animation file in two: the host's (the girl) and the partner's. The channels of the partner's bones go to a file of their own and are moved onto the base
-//! mod's partner model: a bone is renamed to the bone it became, and a bone with no counterpart loses its channels. The root's rest pose differs (the old rig sat at the girl's
+//! Splitting one scene's animation file in two: the host's (the girl) and the male's. The channels of the male's bones go to a file of their own and are moved onto the base
+//! mod's male model: a bone is renamed to the bone it became, and a bone with no counterpart loses its channels. The root's rest pose differs (the old rig sat at the girl's
 //! model offset and turned half way round), so that offset is added to the root's position and rotation in every clip, as constants where a clip had none. Every clip is in both
 //! files with its name, length and loop mode, so the two halves stay one clip. Markers stay with the host.
 
@@ -8,9 +8,9 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// How to split a scene file.
 pub struct SplitSpec<'a> {
-    /// The bones of the old partner rig, the root included.
-    pub partner_bones: &'a HashSet<String>,
-    /// Old bone name to the bone it became. A partner bone not in here has no counterpart and loses its channels.
+    /// The bones of the old male rig, the root included.
+    pub male_bones: &'a HashSet<String>,
+    /// Old bone name to the bone it became. A male bone not in here has no counterpart and loses its channels.
     pub rename: &'a HashMap<String, String>,
     /// The old root bone and what it is called now.
     pub root: &'a str,
@@ -19,15 +19,15 @@ pub struct SplitSpec<'a> {
     pub root_position: [f32; 3],
     /// Added to the root's rotation (degrees): the old root's rest rotation, which the new root does not have.
     pub root_rotation: [f32; 3],
-    pub partner_fingerprint: i32,
+    pub male_fingerprint: i32,
     pub host_id: Option<&'a str>,
-    pub partner_id: Option<&'a str>,
+    pub male_id: Option<&'a str>,
 }
 
 pub struct Split {
     pub host: Vec<u8>,
-    pub partner: Vec<u8>,
-    /// Partner bones whose channels had nowhere to go.
+    pub male: Vec<u8>,
+    /// Male bones whose channels had nowhere to go.
     pub dropped: BTreeSet<String>,
 }
 
@@ -136,22 +136,22 @@ pub fn split(bytes: &[u8], spec: &SplitSpec) -> Result<Split, String> {
     let layout = strut_anim::layout(bytes)?;
     let clips = strut_anim::read(bytes)?;
     let mut host_strings = layout.strings.clone();
-    let mut partner_strings = layout.strings.clone();
+    let mut male_strings = layout.strings.clone();
     let mut host_body: Vec<u8> = Vec::new();
-    let mut partner_body: Vec<u8> = Vec::new();
+    let mut male_body: Vec<u8> = Vec::new();
     let mut dropped = BTreeSet::new();
 
     for (clip, span) in clips.iter().zip(&layout.clips) {
         let head = &bytes[span.start..span.channels_start - 4];
         let mut host_channels: Vec<u8> = Vec::new();
-        let mut partner_channels: Vec<u8> = Vec::new();
-        let (mut host_count, mut partner_count) = (0u16, 0u16);
+        let mut male_channels: Vec<u8> = Vec::new();
+        let (mut host_count, mut male_count) = (0u16, 0u16);
         let (mut root_position, mut root_rotation) = (false, false);
 
         for (channel, (from, to)) in clip.channels.iter().zip(&span.channel_spans) {
             let record = &bytes[*from..*to];
 
-            if channel.kind != "GROUP_BONE" || !spec.partner_bones.contains(&channel.target) {
+            if channel.kind != "GROUP_BONE" || !spec.male_bones.contains(&channel.target) {
                 host_count += 1;
                 host_channels.extend_from_slice(record);
                 continue;
@@ -164,7 +164,7 @@ pub fn split(bytes: &[u8], spec: &SplitSpec) -> Result<Split, String> {
                     _ => None,
                 };
 
-                partner_count += 1;
+                male_count += 1;
 
                 if let Some(add) = add {
                     if channel.property == "POSITION" {
@@ -173,12 +173,12 @@ pub fn split(bytes: &[u8], spec: &SplitSpec) -> Result<Split, String> {
                         root_rotation = true;
                     }
 
-                    put_channel(&mut partner_channels, spec.new_root, if channel.property == "POSITION" { 1 } else { 0 }, record[4], &shifted(channel, add), &mut partner_strings);
+                    put_channel(&mut male_channels, spec.new_root, if channel.property == "POSITION" { 1 } else { 0 }, record[4], &shifted(channel, add), &mut male_strings);
                 } else {
                     let mut copy = record.to_vec();
 
-                    copy[0..2].copy_from_slice(&index_of(&mut partner_strings, spec.new_root).to_le_bytes());
-                    partner_channels.extend_from_slice(&copy);
+                    copy[0..2].copy_from_slice(&index_of(&mut male_strings, spec.new_root).to_le_bytes());
+                    male_channels.extend_from_slice(&copy);
                 }
 
                 continue;
@@ -189,9 +189,9 @@ pub fn split(bytes: &[u8], spec: &SplitSpec) -> Result<Split, String> {
                     /* The keys are copied byte for byte; only the target's name changes. */
                     let mut copy = record.to_vec();
 
-                    copy[0..2].copy_from_slice(&index_of(&mut partner_strings, new).to_le_bytes());
-                    partner_channels.extend_from_slice(&copy);
-                    partner_count += 1;
+                    copy[0..2].copy_from_slice(&index_of(&mut male_strings, new).to_le_bytes());
+                    male_channels.extend_from_slice(&copy);
+                    male_count += 1;
                 }
                 None => {
                     dropped.insert(channel.target.clone());
@@ -200,13 +200,13 @@ pub fn split(bytes: &[u8], spec: &SplitSpec) -> Result<Split, String> {
         }
 
         if !root_position {
-            partner_count += 1;
-            put_channel(&mut partner_channels, spec.new_root, 1, 1, &[literal_key(0.0, spec.root_position)], &mut partner_strings);
+            male_count += 1;
+            put_channel(&mut male_channels, spec.new_root, 1, 1, &[literal_key(0.0, spec.root_position)], &mut male_strings);
         }
 
         if !root_rotation && spec.root_rotation != [0.0; 3] {
-            partner_count += 1;
-            put_channel(&mut partner_channels, spec.new_root, 0, 1, &[literal_key(0.0, spec.root_rotation)], &mut partner_strings);
+            male_count += 1;
+            put_channel(&mut male_channels, spec.new_root, 0, 1, &[literal_key(0.0, spec.root_rotation)], &mut male_strings);
         }
 
         host_body.extend_from_slice(head);
@@ -215,22 +215,22 @@ pub fn split(bytes: &[u8], spec: &SplitSpec) -> Result<Split, String> {
         host_body.extend_from_slice(&host_channels);
         host_body.extend_from_slice(&bytes[span.events_start..span.end]);
 
-        partner_body.extend_from_slice(head);
-        partner_body.extend_from_slice(&partner_count.to_le_bytes());
-        partner_body.extend_from_slice(&0u16.to_le_bytes());
-        partner_body.extend_from_slice(&partner_channels);
+        male_body.extend_from_slice(head);
+        male_body.extend_from_slice(&male_count.to_le_bytes());
+        male_body.extend_from_slice(&0u16.to_le_bytes());
+        male_body.extend_from_slice(&male_channels);
     }
 
     if let Some(id) = spec.host_id {
         index_of(&mut host_strings, id);
     }
 
-    if let Some(id) = spec.partner_id {
-        index_of(&mut partner_strings, id);
+    if let Some(id) = spec.male_id {
+        index_of(&mut male_strings, id);
     }
 
     let host = strut_anim::assemble(&layout, &host_strings, &host_body, clips.len(), None, spec.host_id);
-    let partner = strut_anim::assemble(&layout, &partner_strings, &partner_body, clips.len(), Some(spec.partner_fingerprint), spec.partner_id);
+    let male = strut_anim::assemble(&layout, &male_strings, &male_body, clips.len(), Some(spec.male_fingerprint), spec.male_id);
 
-    Ok(Split { host, partner, dropped })
+    Ok(Split { host, male, dropped })
 }

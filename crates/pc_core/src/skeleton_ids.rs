@@ -66,8 +66,8 @@ fn body_types(root: &Path, files: &[String]) -> BTreeMap<String, String> {
     found
 }
 
-/// The partner's rig is named for what it is, whatever girl's file it came out of.
-pub const PARTNER_ID: &str = "pleasurehorizons:partner";
+/// The male's rig is named for what it is, whatever girl's file it came out of.
+pub const MALE_ID: &str = "pleasurehorizons:male";
 
 /// Proposes an id for every model and animation file of the pack: a girl's model takes her body type (`jenny` is `pleasurehorizons:jenny`) when her girl file names one, and
 /// her own id otherwise; an animation file takes the id of the girl or the skeleton in its name. `overrides` maps a girl or skeleton (the owner) to an id a person chose.
@@ -86,7 +86,7 @@ pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
         }
 
         /* Only the models that are a body get an id: not armour, blocks or items, which are fitted to a body or are not one. */
-        if !matches!(parts[5], "nude" | "dressed" | "partner") {
+        if !matches!(parts[5], "nude" | "dressed" | "male") {
             continue;
         }
 
@@ -94,7 +94,7 @@ pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
         let stem = parts[parts.len() - 1].trim_end_matches(".strutmodel");
         let default = match bodies.get(stem) {
             Some(body) => format!("{}:{}", crate::layout::GAME_NAMESPACE, body),
-            None if stem == "partner" || stem == "player" || parts[5] == "partner" => PARTNER_ID.to_string(),
+            None if stem == "male" || stem == "player" || parts[5] == "male" => MALE_ID.to_string(),
             None => format!("{namespace}:{stem}"),
         };
         let id = overrides.get(stem).cloned().unwrap_or(default);
@@ -265,7 +265,7 @@ mod tests {
 
         let first = plan(&copy, &BTreeMap::new());
 
-        assert!(first.assignments.iter().filter(|a| a.kind == Kind::Model).all(|a| a.rel.contains("/models/nude/") || a.rel.contains("/models/dressed/") || a.rel.contains("/models/partner/")));
+        assert!(first.assignments.iter().filter(|a| a.kind == Kind::Model).all(|a| a.rel.contains("/models/nude/") || a.rel.contains("/models/dressed/") || a.rel.contains("/models/male/")));
 
         assert!(first.unreadable.is_empty(), "{:?}", first.unreadable);
         assert!(first.assignments.iter().any(|a| a.kind == Kind::Model && a.owner == "jenny" && a.id == "pleasurehorizons:jenny"));

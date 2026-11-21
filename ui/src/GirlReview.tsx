@@ -274,7 +274,7 @@ export function GirlReview({ pack, ids, initial, bodyTypes, onDone, onClose }: {
     return () => { current = false; };
   }, [look, kind]);
 
-  /* The player (the partner's body in the model's own scene-rig bones, with the player's skin) and the game's bed, shown or hidden. */
+  /* The player (the male's body in the model's own scene-rig bones, with the player's skin) and the game's bed, shown or hidden. */
   useEffect(() => {
     scene.current?.setRigSkin('/player_skin.png');
     scene.current?.setRigHidden(!showPlayer, false);
@@ -551,7 +551,7 @@ export function GirlReview({ pack, ids, initial, bodyTypes, onDone, onClose }: {
                 {REFERENCES.map(r => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
               </select>
             )}
-            <label class="check-inline" title="Shows the player with their skin on, as the scene rig in the model (the partner's body bones: steve, torso2, and so on), so you can see how the clips line up with a body. A model without those bones shows nothing."><input type="checkbox" checked={showPlayer} onChange={e => setShowPlayer((e.target as HTMLInputElement).checked)} /> Player</label>
+            <label class="check-inline" title="Shows the player with their skin on, as the scene rig in the model (the male's body bones: steve, torso2, and so on), so you can see how the clips line up with a body. A model without those bones shows nothing."><input type="checkbox" checked={showPlayer} onChange={e => setShowPlayer((e.target as HTMLInputElement).checked)} /> Player</label>
             <label class="check-inline" title="Shows the game's bed under her, for a scene on a bed"><input type="checkbox" checked={showBed} onChange={e => setShowBed((e.target as HTMLInputElement).checked)} /> Bed</label>
             <Playback scene={scene} refScene={refScene} clip={clip} bus={bus} />
           </div>

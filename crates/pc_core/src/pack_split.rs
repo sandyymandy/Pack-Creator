@@ -1,12 +1,12 @@
-//! Converting a whole pack to one model per participant, in place. The partner rig (`steve`) is taken out of the girls' models into a model of its own, every scene file is split
-//! between the girl and the partner and written as a role folder with a layout file, `steve` is taken out of the girls' models and out of their base animations, and the old files
+//! Converting a whole pack to one model per participant, in place. The male rig (`steve`) is taken out of the girls' models into a model of its own, every scene file is split
+//! between the girl and the male and written as a role folder with a layout file, `steve` is taken out of the girls' models and out of their base animations, and the old files
 //! are replaced. Every file that is changed, removed or made is kept or listed in a folder of its own (`.packcreator/splits/<stamp>`), so the whole conversion can be undone.
 //!
-//! A scene file is only converted when the proof says every bone is posed exactly as before. A girl whose partner rig differs from the rest gets a partner model of her own, and
+//! A scene file is only converted when the proof says every bone is posed exactly as before. A girl whose male rig differs from the rest gets a male model of her own, and
 //! is reported. If any file cannot be converted, no model is stripped (the old scene files that remain still need `steve`).
 
 use crate::layout::ASSET_SYNC;
-use crate::scene_split::{self, PARTNER_ID, PARTNER_ROOT};
+use crate::scene_split::{self, MALE_ID, MALE_ROOT};
 use crate::skeleton_ids;
 use crate::strut_anim::{self, Clip};
 use crate::strut_model::{self, Model};
@@ -25,7 +25,7 @@ pub struct Report {
     pub files_written: usize,
     pub files_removed: usize,
     pub models_stripped: usize,
-    /// Old partner bones that had no counterpart in the base mod's partner model, and in how many scene files they were animated.
+    /// Old male bones that had no counterpart in the base mod's male model, and in how many scene files they were animated.
     pub dropped_bones: Vec<(String, usize)>,
     /// Bones mapped as closely as the new model allows, and how far they are from where they were (the largest difference of a world matrix).
     pub approximate: Vec<(String, f64)>,
@@ -52,10 +52,10 @@ struct GirlModel {
     model: Model,
 }
 
-/// The model without the partner's rig, with its skeleton id set. Everything else (bones, cubes, meshes, skinning, textures, other extension sections) is carried over byte for
-/// byte; only the partner's bones and cubes are cut out and the numbers that point at bones and cubes are renumbered.
-fn strip_partner(bytes: &[u8], model: &Model, skeleton_id: &str) -> std::result::Result<Vec<u8>, String> {
-    let gone: HashSet<usize> = scene_split::subtree(model, PARTNER_ROOT).into_iter().collect();
+/// The model without the male's rig, with its skeleton id set. Everything else (bones, cubes, meshes, skinning, textures, other extension sections) is carried over byte for
+/// byte; only the male's bones and cubes are cut out and the numbers that point at bones and cubes are renumbered.
+fn strip_male(bytes: &[u8], model: &Model, skeleton_id: &str) -> std::result::Result<Vec<u8>, String> {
+    let gone: HashSet<usize> = scene_split::subtree(model, MALE_ROOT).into_iter().collect();
     let without = strut_model::remove_bones(bytes, &gone)?;
 
     strut_model::set_skeleton_id(&without, Some(skeleton_id))
@@ -94,31 +94,31 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
     let ids = skeleton_ids::plan(root, &BTreeMap::new());
     let id_of = |owner: &str| ids.assignments.iter().find(|a| a.kind == skeleton_ids::Kind::Model && a.owner == owner).map(|a| a.id.clone());
 
-    /* The girls' models that carry the partner. */
+    /* The girls' models that carry the male. */
     let mut models: Vec<GirlModel> = Vec::new();
 
     for rel in &files {
         let parts: Vec<&str> = rel.split('/').collect();
 
-        if parts.len() < 7 || parts[0] != "data" || parts[2] != ASSET_SYNC || parts[3] != "strut" || parts[4] != "models" || parts[5] == "partner" || !rel.ends_with(".strutmodel") {
+        if parts.len() < 7 || parts[0] != "data" || parts[2] != ASSET_SYNC || parts[3] != "strut" || parts[4] != "models" || parts[5] == "male" || !rel.ends_with(".strutmodel") {
             continue;
         }
 
         let Ok(bytes) = std::fs::read(root.join(rel)) else { continue };
         let Ok(model) = strut_model::read(&bytes) else { continue };
 
-        if model.group_bones.iter().any(|b| b.name == PARTNER_ROOT && b.parent_index < 0) {
+        if model.group_bones.iter().any(|b| b.name == MALE_ROOT && b.parent_index < 0) {
             models.push(GirlModel { rel: rel.clone(), stem: parts[parts.len() - 1].trim_end_matches(".strutmodel").to_string(), namespace: parts[1].to_string(), bytes, model });
         }
     }
 
     if models.is_empty() {
-        report.findings.push("No model in this pack carries the partner rig (steve): there is nothing to split.".into());
+        report.findings.push("No model in this pack carries the male rig (steve): there is nothing to split.".into());
         return Ok(report);
     }
 
     let namespace = models[0].namespace.clone();
-    let shared_id = PARTNER_ID.to_string();
+    let shared_id = MALE_ID.to_string();
     let mut dropped: BTreeMap<String, usize> = BTreeMap::new();
     let mut approximate: BTreeMap<String, f64> = BTreeMap::new();
 
@@ -140,7 +140,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
         let Ok(bytes) = std::fs::read(root.join(rel)) else { continue };
         let Ok(clips) = strut_anim::read(&bytes) else { continue };
 
-        if !clips.iter().any(|c| c.channels.iter().any(|ch| ch.target == PARTNER_ROOT)) && !in_scenes {
+        if !clips.iter().any(|c| c.channels.iter().any(|ch| ch.target == MALE_ROOT)) && !in_scenes {
             continue;
         }
 
@@ -184,15 +184,15 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
         let mut failed = false;
 
         for (target, wanted) in &targets {
-            /* The model that was animated with it: hers, one of the skeleton named, or (when the skeleton has no girl in this pack) any with the partner rig, which is all that the
-               partner's side and the proof need of it. */
+            /* The model that was animated with it: hers, one of the skeleton named, or (when the skeleton has no girl in this pack) any with the male rig, which is all that the
+               male's side and the proof need of it. */
             let stem = match kind {
                 Owner::Girl => owner.clone(),
                 _ => models.iter().find(|m| id_of(&m.stem).as_deref() == Some(wanted.as_str())).or_else(|| models.first()).map(|m| m.stem.clone()).unwrap_or_default(),
             };
             let Some(model) = models.iter().find(|m| m.stem == stem && m.rel.contains("/nude/")).or_else(|| models.iter().find(|m| m.stem == stem)) else {
                 if scene.is_some() {
-                    report.skipped.push(format!("{rel}: {stem} has no model with the partner rig"));
+                    report.skipped.push(format!("{rel}: {stem} has no model with the male rig"));
                 }
 
                 failed = true;
@@ -215,12 +215,12 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
                     break;
                 }
             };
-            let (Ok(host_clips), Ok(partner_clips)) = (strut_anim::read(&done.host), strut_anim::read(&done.partner)) else {
+            let (Ok(host_clips), Ok(male_clips)) = (strut_anim::read(&done.host), strut_anim::read(&done.male)) else {
                 report.skipped.push(format!("{rel}: the split files did not read back"));
                 failed = true;
                 break;
             };
-            let proof = scene_split::prove(&model.model, &clips, &host_clips, &partner_clips, 1e-4);
+            let proof = scene_split::prove(&model.model, &clips, &host_clips, &male_clips, 1e-4);
 
             if let Some(first) = proof.mismatches.first() {
                 report.skipped.push(format!("{rel}: converting it would move {} bones (first: {} in {} at tick {}), so it was left as it is", proof.mismatches.len(), first.bone, first.clip, first.tick));
@@ -240,7 +240,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
                 *worst = worst.max(by);
             }
 
-            produced.push((target.clone(), done.host, done.partner));
+            produced.push((target.clone(), done.host, done.male));
         }
 
         if failed {
@@ -249,20 +249,20 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
 
         match scene {
             None => {
-                /* A base animation keeps the girl's half only: nobody plays the partner there. */
+                /* A base animation keeps the girl's half only: nobody plays the male there. */
                 if let Some((_, host, _)) = produced.into_iter().next() {
                     writes.insert(rel.clone(), host);
                 }
             }
             Some(scene) => {
-                for (target, host, partner) in produced {
+                for (target, host, male) in produced {
                     let by_girl = kind == Owner::Girl;
                     let host_id = if by_girl { id_of(&target).unwrap_or_default() } else { format!("{}:{}", crate::layout::GAME_NAMESPACE, target) };
                     let host_rel = if by_girl { format!("{base}/animations/scenes/{scene}/host/owners/{target}.strutanim") } else { format!("{base}/animations/scenes/{scene}/host/skeletons/{}.strutanim", id_path(&host_id)) };
                     let entry = scenes.entry(scene.clone()).or_default();
 
                     entry.hosts.insert(host_id);
-                    entry.partners.push((target.clone(), by_girl, shared_id.clone(), partner, clips.clone()));
+                    entry.males.push((target.clone(), by_girl, shared_id.clone(), male, clips.clone()));
                     writes.insert(host_rel, host);
                 }
 
@@ -271,20 +271,20 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
         }
     }
 
-    /* Partner files and the layout of every scene. A scene that is already split (an earlier import, or an earlier conversion) keeps what it has: a girl whose partner clips are
+    /* Male files and the layout of every scene. A scene that is already split (an earlier import, or an earlier conversion) keeps what it has: a girl whose male clips are
        the ones already there adds nothing, and the layout takes the new girls in. */
     for (scene, parts) in &scenes {
-        let skeleton_rel = format!("{base}/animations/scenes/{scene}/partner/skeletons/{}.strutanim", id_path(&shared_id));
+        let skeleton_rel = format!("{base}/animations/scenes/{scene}/male/skeletons/{}.strutanim", id_path(&shared_id));
         let existing_skeleton = std::fs::read(root.join(&skeleton_rel)).ok().and_then(|b| strut_anim::read(&b).ok());
-        let reference = existing_skeleton.clone().unwrap_or_else(|| strut_anim::read(&parts.partners[0].3).unwrap_or_default());
+        let reference = existing_skeleton.clone().unwrap_or_else(|| strut_anim::read(&parts.males[0].3).unwrap_or_default());
 
         if existing_skeleton.is_none() {
-            writes.insert(skeleton_rel.clone(), parts.partners[0].3.clone());
+            writes.insert(skeleton_rel.clone(), parts.males[0].3.clone());
         }
 
         let mut differing = 0;
 
-        for (owner, by_girl, id, bytes, _) in &parts.partners {
+        for (owner, by_girl, id, bytes, _) in &parts.males {
             if clips_equal(&strut_anim::read(bytes).unwrap_or_default(), &reference) {
                 continue;
             }
@@ -292,12 +292,12 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
             let folder = if *by_girl { "owners" } else { "skeletons" };
             let file = if *by_girl { owner.clone() } else { id_path(id).to_string() };
 
-            writes.insert(format!("{base}/animations/scenes/{scene}/partner/{folder}/{file}.strutanim"), bytes.clone());
+            writes.insert(format!("{base}/animations/scenes/{scene}/male/{folder}/{file}.strutanim"), bytes.clone());
             differing += 1;
         }
 
         if differing > 0 {
-            report.findings.push(format!("The scene {scene} has partner motion that differs from girl to girl, so {differing} girls' partner clips are written for them alone (partner/owners)."));
+            report.findings.push(format!("The scene {scene} has male motion that differs from girl to girl, so {differing} girls' male clips are written for them alone (male/owners)."));
         }
 
         let layout_rel = format!("{base}/scenes/{scene}.strutscene");
@@ -305,7 +305,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
             serde_json::json!({
                 "roles": {
                     "host": { "clipSet": format!("scenes/{scene}/host"), "skeleton": parts.hosts.iter().next(), "compatible": [], "required": true },
-                    "partner": { "clipSet": format!("scenes/{scene}/partner"), "skeleton": shared_id, "required": true }
+                    "male": { "clipSet": format!("scenes/{scene}/male"), "skeleton": shared_id, "required": true }
                 },
                 "clips": {}
             })
@@ -325,7 +325,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
         }
 
         if let Some(clips) = layout.get_mut("clips").and_then(|c| c.as_object_mut()) {
-            for clip in &parts.partners[0].4 {
+            for clip in &parts.males[0].4 {
                 let loop_name = ["once", "loop", "hold"].get(clip.loop_mode as usize).copied().unwrap_or("once");
 
                 clips.entry(clip.name.clone()).or_insert_with(|| serde_json::json!({ "length": (clip.duration * 20.0).round() as u32, "loop": loop_name }));
@@ -339,12 +339,12 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
     report.dropped_bones = dropped.into_iter().collect();
     report.approximate = approximate.into_iter().filter(|(_, by)| *by > 1e-4).collect();
 
-    /* Strip the partner from the girls' models, but only when every scene could be converted: a scene file left behind still needs it. */
+    /* Strip the male from the girls' models, but only when every scene could be converted: a scene file left behind still needs it. */
     if report.skipped.is_empty() {
         for m in &models {
             let Some(id) = id_of(&m.stem) else { continue };
 
-            match strip_partner(&m.bytes, &m.model, &id) {
+            match strip_male(&m.bytes, &m.model, &id) {
                 Ok(bytes) => {
                     writes.insert(m.rel.clone(), bytes);
                     report.models_stripped += 1;
@@ -353,7 +353,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
             }
         }
     } else {
-        report.findings.push("Some files could not be converted, so the girls' models keep the partner rig for now.".into());
+        report.findings.push("Some files could not be converted, so the girls' models keep the male rig for now.".into());
     }
 
     report.files_written = writes.len();
@@ -415,8 +415,8 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
 #[derive(Default)]
 struct SceneParts {
     hosts: std::collections::BTreeSet<String>,
-    /// Who it was for, whether by girl, the partner's id, its half of the file, and the whole file's clips.
-    partners: Vec<(String, bool, String, Vec<u8>, Vec<Clip>)>,
+    /// Who it was for, whether by girl, the male's id, its half of the file, and the whole file's clips.
+    males: Vec<(String, bool, String, Vec<u8>, Vec<Clip>)>,
 }
 
 fn clips_equal(a: &[Clip], b: &[Clip]) -> bool {
@@ -511,18 +511,18 @@ mod tests {
 
         let after = snapshot(&copy);
 
-        assert!(after.keys().any(|k| k.contains("/partner/") && k.ends_with(".strutanim")));
-        assert!(!after.keys().any(|k| k.contains("models/partner/")), "the pack writes a partner model, but the base mod has it");
+        assert!(after.keys().any(|k| k.contains("/male/") && k.ends_with(".strutanim")));
+        assert!(!after.keys().any(|k| k.contains("models/male/")), "the pack writes a male model, but the base mod has it");
         assert!(after.keys().any(|k| k.contains("/scenes/") && k.ends_with(".strutscene")));
         assert!(after.keys().any(|k| k.contains("/host/owners/")));
-        assert!(!after.keys().any(|k| k.contains("animations/scenes/") && !k.contains("/host/") && !k.contains("/partner/")), "an old scene file is left");
+        assert!(!after.keys().any(|k| k.contains("animations/scenes/") && !k.contains("/host/") && !k.contains("/male/")), "an old scene file is left");
 
         if done.skipped.is_empty() {
             for (rel, bytes) in &after {
                 if rel.contains("/models/nude/") && rel.ends_with(".strutmodel") {
                     let model = strut_model::read(bytes).unwrap();
 
-                    assert!(!model.group_bones.iter().any(|b| b.name == PARTNER_ROOT), "{rel} still has the partner");
+                    assert!(!model.group_bones.iter().any(|b| b.name == MALE_ROOT), "{rel} still has the male");
                     assert!(model.skeleton_id.is_some(), "{rel} has no skeleton id");
                 }
             }
@@ -579,7 +579,7 @@ mod tests {
             }
 
             assert_eq!(a.meshes.len(), b.meshes.len(), "{rel}");
-            assert_eq!(a.cubes.len() - scene_split::subtree(&a, PARTNER_ROOT).iter().map(|i| a.group_bones[*i].elements.len()).sum::<usize>(), b.cubes.len(), "{rel}");
+            assert_eq!(a.cubes.len() - scene_split::subtree(&a, MALE_ROOT).iter().map(|i| a.group_bones[*i].elements.len()).sum::<usize>(), b.cubes.len(), "{rel}");
 
             for (x, y) in a.armatures.iter().zip(&b.armatures) {
                 let name = |m: &Model, i: i16| (i >= 0).then(|| m.group_bones[i as usize].name.clone());

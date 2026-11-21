@@ -1,6 +1,6 @@
-//! Converting a pack to one model per participant. The old girl models carry the partner as a second root (`steve`) that the same clip animates. The base mod now has one partner
-//! model (`player`) of its own, so this moves the partner's channels onto its bones (a bone is renamed to the bone it became), splits every scene file between the girl and the
-//! partner, and proves that the bones that kept their place are posed exactly as before. See `AI Info/SCENE_SPLIT_PLAN.md`.
+//! Converting a pack to one model per participant. The old girl models carry the male as a second root (`steve`) that the same clip animates. The base mod now has one male
+//! model (`player`) of its own, so this moves the male's channels onto its bones (a bone is renamed to the bone it became), splits every scene file between the girl and the
+//! male, and proves that the bones that kept their place are posed exactly as before. See `AI Info/SCENE_SPLIT_PLAN.md`.
 
 use crate::anim_split::{self, SplitSpec};
 use crate::pose::{self, Mat4};
@@ -8,16 +8,16 @@ use crate::strut_anim::{self, Clip};
 use crate::strut_model::{self, Model};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-/// The name of the partner's root bone in the girls' models.
-pub const PARTNER_ROOT: &str = "steve";
+/// The name of the male's root bone in the girls' models.
+pub const MALE_ROOT: &str = "steve";
 
-/// The skeleton id of the base mod's partner model.
-pub const PARTNER_ID: &str = "pleasurehorizons:partner";
+/// The skeleton id of the base mod's male model.
+pub const MALE_ID: &str = "pleasurehorizons:male";
 
-/// The base mod's partner model (`models/nude/player.strutmodel`), as it was when this was built: the proof poses it, and its bone names give the fingerprint of the partner's clips.
-const PARTNER_MODEL: &[u8] = include_bytes!("../resources/partner_player.strutmodel");
+/// The base mod's male model (`models/nude/player.strutmodel`), as it was when this was built: the proof poses it, and its bone names give the fingerprint of the male's clips.
+const MALE_MODEL: &[u8] = include_bytes!("../resources/male_player.strutmodel");
 
-/// What each bone of the old partner rig became in the new partner model, checked against both models and confirmed. A bone of the old rig that is not here (the penis details, the
+/// What each bone of the old male rig became in the new male model, checked against both models and confirmed. A bone of the old rig that is not here (the penis details, the
 /// `steveLeftArm` and `steveRightArm` joints) has no counterpart, and its channels are dropped.
 pub const BONE_MAP: &[(&str, &str, &str)] = &[
     ("steve", "player", ""),
@@ -51,7 +51,7 @@ pub const BONE_MAP: &[(&str, &str, &str)] = &[
     ("ballR", "ballR", "Torso2"),
 ];
 
-/// The map for one girl's model: the bones that are in her partner rig, hanging off the parent they should.
+/// The map for one girl's model: the bones that are in her male rig, hanging off the parent they should.
 pub fn rename_for(model: &Model) -> HashMap<String, String> {
     let parent_of = |name: &str| -> Option<String> {
         let b = model.group_bones.iter().find(|b| b.name == name)?;
@@ -91,9 +91,9 @@ fn exact_bones(old: &Model, new: &Model, rename: &HashMap<String, String>) -> Ha
     exact
 }
 
-/// The base mod's partner model.
-pub fn partner_model() -> Model {
-    strut_model::read(PARTNER_MODEL).expect("the partner model that is built in reads")
+/// The base mod's male model.
+pub fn male_model() -> Model {
+    strut_model::read(MALE_MODEL).expect("the male model that is built in reads")
 }
 
 /// The bones of the subtree under `root`, root first, in the model's order.
@@ -136,17 +136,17 @@ pub fn fingerprint(model: &Model) -> i32 {
 /// What the split of one scene file made.
 pub struct SplitFile {
     pub host: Vec<u8>,
-    pub partner: Vec<u8>,
-    /// Old partner bones whose channels had nowhere to go.
+    pub male: Vec<u8>,
+    /// Old male bones whose channels had nowhere to go.
     pub dropped: Vec<String>,
 }
 
-/// Splits a scene file between the host and the base mod's partner. `old_model` is the girl's model the file was made with (its partner root says where the root sat).
+/// Splits a scene file between the host and the base mod's male. `old_model` is the girl's model the file was made with (its male root says where the root sat).
 pub fn split_file(bytes: &[u8], old_model: &Model, host_id: &str) -> Result<SplitFile, String> {
-    let members = subtree(old_model, PARTNER_ROOT);
+    let members = subtree(old_model, MALE_ROOT);
 
     if members.is_empty() {
-        return Err(format!("the model has no bone called {PARTNER_ROOT}"));
+        return Err(format!("the model has no bone called {MALE_ROOT}"));
     }
 
     let bones: HashSet<String> = members.iter().map(|i| old_model.group_bones[*i].name.clone()).collect();
@@ -155,19 +155,19 @@ pub fn split_file(bytes: &[u8], old_model: &Model, host_id: &str) -> Result<Spli
     let to_sixteenths = 16.0 / old_model.units_per_block;
     let rename = rename_for(old_model);
     let spec = SplitSpec {
-        partner_bones: &bones,
+        male_bones: &bones,
         rename: &rename,
-        root: PARTNER_ROOT,
+        root: MALE_ROOT,
         new_root: "player",
         root_position: root.pivot.map(|v| v * to_sixteenths),
         root_rotation: root.rotation,
-        partner_fingerprint: fingerprint(&partner_model()),
+        male_fingerprint: fingerprint(&male_model()),
         host_id: Some(host_id),
-        partner_id: Some(PARTNER_ID),
+        male_id: Some(MALE_ID),
     };
     let done = anim_split::split(bytes, &spec)?;
 
-    Ok(SplitFile { host: done.host, partner: done.partner, dropped: done.dropped.into_iter().collect() })
+    Ok(SplitFile { host: done.host, male: done.male, dropped: done.dropped.into_iter().collect() })
 }
 
 /// One thing the proof found different.
@@ -186,37 +186,37 @@ pub struct Proof {
     pub approximate: BTreeMap<String, f64>,
 }
 
-/// Poses the old girl model with the old clip, and the girl's model and the partner model with their halves, at several ticks, and compares the world matrix of every bone that
-/// has a counterpart. The partner is placed at the origin, as the game does.
-pub fn prove(old_model: &Model, old_clips: &[Clip], host_clips: &[Clip], partner_clips: &[Clip], tolerance: f64) -> Proof {
-    let new_model = partner_model();
+/// Poses the old girl model with the old clip, and the girl's model and the male model with their halves, at several ticks, and compares the world matrix of every bone that
+/// has a counterpart. The male is placed at the origin, as the game does.
+pub fn prove(old_model: &Model, old_clips: &[Clip], host_clips: &[Clip], male_clips: &[Clip], tolerance: f64) -> Proof {
+    let new_model = male_model();
     let rename = rename_for(old_model);
     let exact = exact_bones(old_model, &new_model, &rename);
-    let partner_set: HashSet<String> = subtree(old_model, PARTNER_ROOT).into_iter().map(|i| old_model.group_bones[i].name.clone()).collect();
+    let male_set: HashSet<String> = subtree(old_model, MALE_ROOT).into_iter().map(|i| old_model.group_bones[i].name.clone()).collect();
     let mut proof = Proof::default();
 
     for old in old_clips {
         let host = host_clips.iter().find(|c| c.name == old.name);
-        let partner = partner_clips.iter().find(|c| c.name == old.name);
+        let male = male_clips.iter().find(|c| c.name == old.name);
         let steps = 8;
 
         for step in 0..=steps {
             let time = old.duration as f64 * step as f64 / steps as f64;
             let before = pose::world_matrices(old_model, Some(old), time);
             let host_after = host.map(|c| pose::world_matrices(old_model, Some(c), time));
-            let partner_after = partner.map(|c| pose::world_matrices(&new_model, Some(c), time));
+            let male_after = male.map(|c| pose::world_matrices(&new_model, Some(c), time));
 
             for (name, matrix) in &before {
-                let (label, after): (String, Option<&Mat4>) = if partner_set.contains(name) {
+                let (label, after): (String, Option<&Mat4>) = if male_set.contains(name) {
                     let Some(new_name) = rename.get(name) else { continue };
 
-                    (new_name.clone(), partner_after.as_ref().and_then(|p| p.get(new_name)))
+                    (new_name.clone(), male_after.as_ref().and_then(|p| p.get(new_name)))
                 } else {
                     (name.clone(), host_after.as_ref().and_then(|h| h.get(name)))
                 };
                 let by = after.map_or(f64::INFINITY, |a| pose::distance(matrix, a));
 
-                if partner_set.contains(name) && !exact.contains(&label) {
+                if male_set.contains(name) && !exact.contains(&label) {
                     let worst = proof.approximate.entry(label).or_insert(0.0);
 
                     *worst = worst.max(by);
@@ -234,7 +234,7 @@ pub fn prove(old_model: &Model, old_clips: &[Clip], host_clips: &[Clip], partner
 pub fn split_and_prove(old_model_bytes: &[u8], scene_bytes: &[u8], host_id: &str) -> Result<(SplitFile, Proof), String> {
     let model = strut_model::read(old_model_bytes)?;
     let done = split_file(scene_bytes, &model, host_id)?;
-    let proof = prove(&model, &strut_anim::read(scene_bytes)?, &strut_anim::read(&done.host)?, &strut_anim::read(&done.partner)?, 1e-4);
+    let proof = prove(&model, &strut_anim::read(scene_bytes)?, &strut_anim::read(&done.host)?, &strut_anim::read(&done.male)?, 1e-4);
 
     Ok((done, proof))
 }
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn the_map_only_names_bones_that_exist() {
-        let new_model = partner_model();
+        let new_model = male_model();
         let old = std::fs::read(r"C:\Users\Sandyy\Downloads\model.strutmodel").ok().and_then(|b| strut_model::read(&b).ok());
 
         for (from, to, _) in BONE_MAP {
@@ -287,20 +287,20 @@ mod tests {
             /* The halves are one clip: same names, lengths and loop modes; the markers stay with the host. */
             let whole = strut_anim::read(&bytes).unwrap();
             let host = strut_anim::read(&done.host).unwrap();
-            let partner = strut_anim::read(&done.partner).unwrap();
+            let male = strut_anim::read(&done.male).unwrap();
 
             assert_eq!(whole.len(), host.len());
-            assert_eq!(whole.len(), partner.len());
+            assert_eq!(whole.len(), male.len());
 
-            for ((w, h), p) in whole.iter().zip(&host).zip(&partner) {
+            for ((w, h), p) in whole.iter().zip(&host).zip(&male) {
                 assert_eq!((&w.name, w.duration, w.loop_mode), (&h.name, h.duration, h.loop_mode));
                 assert_eq!((&w.name, w.duration, w.loop_mode), (&p.name, p.duration, p.loop_mode));
                 assert_eq!(w.events, h.events);
                 assert!(p.events.is_empty());
-                assert!(p.channels.iter().all(|c| partner_model().group_bones.iter().any(|b| b.name == c.target)), "{name}: a partner channel names a bone the partner model lacks");
+                assert!(p.channels.iter().all(|c| male_model().group_bones.iter().any(|b| b.name == c.target)), "{name}: a male channel names a bone the male model lacks");
             }
 
-            assert_eq!(strut_anim::skeleton_id(&done.partner).unwrap().as_deref(), Some(PARTNER_ID));
+            assert_eq!(strut_anim::skeleton_id(&done.male).unwrap().as_deref(), Some(MALE_ID));
             checked += 1;
         }
 

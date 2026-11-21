@@ -11,9 +11,9 @@ import { entityAt, SpringSim, type BoneFrame, type Motion, type SpringParams, ty
 
 const FACE_NAMES = ['west', 'east', 'north', 'south', 'up', 'down'];
 const RAD = Math.PI / 180;
-/** Bones that are the scene rig (the partner's body, items, armour, cameras) and not part of the girl. */
+/** Bones that are the scene rig (the male's body, items, armour, cameras) and not part of the girl. */
 const RIG = /^(steve|items|itemrenderer|weapon|armor.*|girlcam|boycam|boobwindow)$/i;
-/** Names a girl's own bones can have too (an old model's `chest` holds her head and arms): they are the partner's only at the top of the model, as `steve`'s children are. */
+/** Names a girl's own bones can have too (an old model's `chest` holds her head and arms): they are the male's only at the top of the model, as `steve`'s children are. */
 const RIG_ROOT = /^(torso2|rightleg|leftleg|chest)$/i;
 const isRigName = (name: string, root: boolean) => RIG.test(name) || (root && RIG_ROOT.test(name));
 
@@ -434,7 +434,7 @@ export interface Viewer {
   onEvent(callback: ((event: { time: number; kind: string; payload: string }) => void) | null): void;
   /** Hears that a clip that does not repeat has played out. */
   onClipEnd(callback: (() => void) | null): void;
-  /** Hears a click on the model: on the girl, or on the scene rig (her partner). */
+  /** Hears a click on the model: on the girl, or on the scene rig (her male). */
   onPick(callback: ((target: 'girl' | 'rig' | 'none') => void) | null): void;
   /** The skin the scene rig is drawn with (the player's), or null to draw it with the model's texture. */
   setRigSkin(url: string | null): void;

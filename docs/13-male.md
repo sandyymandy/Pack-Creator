@@ -1,19 +1,19 @@
-# The partner and updating a pack
+# The male and updating a pack
 
-## The partner
+## The male
 
-The partner is the body that plays opposite the girl in a scene: the player, or later another character. The base mod has **one** partner model, and every scene uses it. A pack does not bring a partner of its own.
+The male is the body that plays opposite the girl in a scene: the player, or later another character. The base mod has **one** male model, and every scene uses it. A pack does not bring a male of its own.
 
-Its clips are in each scene's `partner` role ([scene animations](doc:animations)). The partner stands at the scene's origin, as the girl does, and the clips move it to where it should be.
+Its clips are in each scene's `male` role ([scene animations](doc:animations)). The male stands at the scene's origin, as the girl does, and the clips move it to where it should be.
 
-Before pack format 2 the partner was a second skeleton called `steve` inside every girl's model, and one animation file moved both. That rig is no longer used.
+Before pack format 2 the male was a second skeleton called `steve` inside every girl's model, and one animation file moved both. That rig is no longer used.
 
 ## Updating an older pack
 
 Open a pack made before format 2 and the **Update this pack** window opens by itself. You can also open it from the top bar (**Split scenes**). It shows what it would do before it does anything:
 
-- the old partner rig is taken out of every girl's model;
-- every scene's animation file is split into the girl's clips and the partner's, and written as role folders with a layout file;
+- the old male rig is taken out of every girl's model;
+- every scene's animation file is split into the girl's clips and the male's, and written as role folders with a layout file;
 - each model and animation file gets its skeleton id;
 - the pack's format number goes to 2.
 
@@ -21,7 +21,7 @@ It is done in place, and **Undo** puts every file back as it was. A scene is con
 
 ### What carries over
 
-Each bone of the old partner rig is moved onto the bone it became in the base mod's partner model. Most are the same bone with a new name (`Torso2` is `torso`, `Head2` is `head`, `LeftArm` is `armL`, and so on). A few differ:
+Each bone of the old male rig is moved onto the bone it became in the base mod's male model. Most are the same bone with a new name (`Torso2` is `torso`, `Head2` is `head`, `LeftArm` is `armL`, and so on). A few differ:
 
 - The penis was rebuilt as `penis`, `shaft`, `penisHead` and the two balls. Its animation moves onto them as closely as the new model allows; the window lists how far off each bone can be, so look at those scenes in the simulator.
 - The right arm's Alex and Steve variants moved slightly.

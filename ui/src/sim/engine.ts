@@ -304,7 +304,7 @@ export class SceneSim {
     return this.state.phase === 'LAYING_DOWN' || this.state.phase === 'BED_IDLE' || this.state.phase === 'INTRO' || this.state.phase === 'STATIONARY_INTRO';
   }
 
-  /** Straight to the main part: undressed if the scene undresses her, on the bed, the partner there, and the sex (or the solo loop) going. For testing the part that matters. */
+  /** Straight to the main part: undressed if the scene undresses her, on the bed, the male there, and the sex (or the solo loop) going. For testing the part that matters. */
   skip(): void {
     if (!this.canSkip()) return;
 

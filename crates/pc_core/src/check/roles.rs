@@ -15,8 +15,8 @@ use std::time::SystemTime;
 #[derive(Clone, Default)]
 struct Info {
     skeleton_id: Option<String>,
-    /// A model: it still has the old partner rig. An animation: its clips as (name, seconds, loop mode).
-    has_partner_rig: bool,
+    /// A model: it still has the old male rig. An animation: its clips as (name, seconds, loop mode).
+    has_male_rig: bool,
     clips: Vec<(String, f32, u8)>,
     readable: bool,
 }
@@ -44,7 +44,7 @@ fn info_of(root: &Path, rel: &str) -> Info {
             if let Ok(model) = strut_model::read(&bytes) {
                 info.readable = true;
                 info.skeleton_id = model.skeleton_id.clone();
-                info.has_partner_rig = model.group_bones.iter().any(|b| b.name == crate::scene_split::PARTNER_ROOT && b.parent_index < 0);
+                info.has_male_rig = model.group_bones.iter().any(|b| b.name == crate::scene_split::MALE_ROOT && b.parent_index < 0);
             }
         } else if let Ok(clips) = strut_anim::read(&bytes) {
             info.readable = true;
@@ -128,7 +128,7 @@ pub fn check(root: &Path, facts: &PackFacts) -> Vec<Diagnostic> {
             None => {}
         }
 
-        if info.has_partner_rig {
+        if info.has_male_rig {
             any_old_rig.push(rel.clone());
         }
     }
@@ -269,10 +269,10 @@ pub fn check(root: &Path, facts: &PackFacts) -> Vec<Diagnostic> {
         }
     }
 
-    /* The old partner rig is only needed by scenes that are not split. */
+    /* The old male rig is only needed by scenes that are not split. */
     if !old_scene_files_left && !roles.is_empty() {
         for rel in any_old_rig {
-            found.push(file_level(Severity::Info, "unused-partner-rig", "Every scene of this pack is split, so the partner rig (steve) in this model is never used. Run the pack update to take it out.", &rel));
+            found.push(file_level(Severity::Info, "unused-male-rig", "Every scene of this pack is split, so the male rig (steve) in this model is never used. Run the pack update to take it out.", &rel));
         }
     }
 
@@ -331,7 +331,7 @@ mod tests {
         crate::migrate::update(&copy, true).unwrap();
 
         let after = codes(&copy);
-        let new_codes = ["scene-without-layout", "role-without-files", "role-without-file-for-skeleton", "girl-not-in-role", "old-and-new-scene-files", "animation-without-skeleton-id", "model-without-skeleton-id", "clip-differs-between-roles", "owner-clip-not-in-skeleton", "layout-clip-length", "unused-partner-rig", "bad-layout", "scene-without-animation"];
+        let new_codes = ["scene-without-layout", "role-without-files", "role-without-file-for-skeleton", "girl-not-in-role", "old-and-new-scene-files", "animation-without-skeleton-id", "model-without-skeleton-id", "clip-differs-between-roles", "owner-clip-not-in-skeleton", "layout-clip-length", "unused-male-rig", "bad-layout", "scene-without-animation"];
 
         assert!(new_codes.iter().all(|c| !after.contains(*c)), "a converted pack should be clean of the layout checks: {:?}", new_codes.iter().filter(|c| after.contains(**c)).collect::<Vec<_>>());
 
@@ -341,7 +341,7 @@ mod tests {
         let scene = layout.file_stem().unwrap().to_string_lossy().to_string();
 
         /* A layout without its role folder. */
-        std::fs::remove_dir_all(scene_dir.join(format!("animations/scenes/{scene}/partner"))).unwrap();
+        std::fs::remove_dir_all(scene_dir.join(format!("animations/scenes/{scene}/male"))).unwrap();
         assert!(codes(&copy).contains("role-without-files"));
 
         /* A layout that is not JSON. */

@@ -5,8 +5,8 @@ import { messageOf, notify } from './notify';
 import type { MigrationStatus, SplitReport } from './types';
 
 /**
- * Splitting scenes: each girl's model carries the partner as a second rig that her scene animations also move. This takes that rig out into a model of its own, writes each scene as
- * a role folder (the girl's clips, the partner's clips) with a layout file, and removes the rig from the girl's models. It is done in place, only where every bone is proven to be
+ * Splitting scenes: each girl's model carries the male as a second rig that her scene animations also move. This takes that rig out into a model of its own, writes each scene as
+ * a role folder (the girl's clips, the male's clips) with a layout file, and removes the rig from the girl's models. It is done in place, only where every bone is proven to be
  * posed exactly as before, and the whole conversion can be undone.
  */
 export function SplitDialog({ onClose }: { onClose: () => void }) {
@@ -56,10 +56,10 @@ export function SplitDialog({ onClose }: { onClose: () => void }) {
         <div style="max-height:55vh;overflow:auto">
           <p style="margin:0 0 8px">
             {done ? 'Done: ' : 'This would convert '}
-            <strong>{shown.scenes}</strong> scenes, write {shown.files_written} files, replace {shown.files_removed} old scene files and take the partner rig out of {shown.models_stripped} models.
+            <strong>{shown.scenes}</strong> scenes, write {shown.files_written} files, replace {shown.files_removed} old scene files and take the male rig out of {shown.models_stripped} models.
           </p>
-          {shown.dropped_bones.length > 0 && <details><summary>{shown.dropped_bones.length} old partner bones have no counterpart (their animation is dropped)</summary>{shown.dropped_bones.map(([bone, files]) => <p class="muted" key={bone} style="margin:2px 0">{bone}: animated in {files} files</p>)}</details>}
-          {shown.approximate.length > 0 && <details><summary>{shown.approximate.length} partner bones are mapped as closely as the new model allows</summary>{shown.approximate.map(([bone, by]) => <p class="muted" key={bone} style="margin:2px 0">{bone}: up to {by.toFixed(2)} off</p>)}</details>}
+          {shown.dropped_bones.length > 0 && <details><summary>{shown.dropped_bones.length} old male bones have no counterpart (their animation is dropped)</summary>{shown.dropped_bones.map(([bone, files]) => <p class="muted" key={bone} style="margin:2px 0">{bone}: animated in {files} files</p>)}</details>}
+          {shown.approximate.length > 0 && <details><summary>{shown.approximate.length} male bones are mapped as closely as the new model allows</summary>{shown.approximate.map(([bone, by]) => <p class="muted" key={bone} style="margin:2px 0">{bone}: up to {by.toFixed(2)} off</p>)}</details>}
           {shown.skipped.length > 0 && <details open><summary>{shown.skipped.length} files left as they are</summary>{shown.skipped.map(d => <p class="muted" key={d} style="margin:2px 0">{d}</p>)}</details>}
           {shown.findings.length > 0 && <details><summary>{shown.findings.length} notes</summary>{shown.findings.map(d => <p class="muted" key={d} style="margin:2px 0">{d}</p>)}</details>}
         </div>

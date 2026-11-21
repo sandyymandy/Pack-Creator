@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClipData, ModelData } from '../types';
-import { withPartner, withPartnerClips } from './partner';
+import { withMale, withMaleClips } from './male';
 
 const model = (bones: string[], texture: string): ModelData => ({
   version: 101, unitsPerBlock: 16, boundsMin: [0, 0, 0], boundsMax: [1, 1, 1],
@@ -16,14 +16,14 @@ const clip = (name: string, targets: string[]): ClipData => ({
   channels: targets.map(target => ({ target, kind: 'GROUP_BONE', property: 'ROTATION', keys: [] }))
 });
 
-describe('the partner joined to the girl for drawing', () => {
+describe('the male joined to the girl for drawing', () => {
   const girl = model(['body', 'Head'], 'girl.png');
-  const partner = model(['player', 'head', 'torso'], 'player.png');
+  const male = model(['player', 'head', 'torso'], 'player.png');
 
-  it('adds the partner as a steve rig whose bones cannot meet hers', () => {
-    const both = withPartner(girl, partner);
+  it('adds the male as a steve rig whose bones cannot meet hers', () => {
+    const both = withMale(girl, male);
 
-    expect(both.groupBones.map(b => b.name)).toEqual(['body', 'Head', 'steve', 'partner:head', 'partner:torso']);
+    expect(both.groupBones.map(b => b.name)).toEqual(['body', 'Head', 'steve', 'male:head', 'male:torso']);
     expect(both.groupBones[3].parentIndex).toBe(2);
     expect(both.groupBones[2].parentIndex).toBe(-1);
     expect(both.cubes).toHaveLength(5);
@@ -35,14 +35,14 @@ describe('the partner joined to the girl for drawing', () => {
   it('leaves a model that still has the old rig alone', () => {
     const old = model(['body', 'steve'], 'girl.png');
 
-    expect(withPartner(old, partner)).toBe(old);
+    expect(withMale(old, male)).toBe(old);
   });
 
-  it('joins the partner clip of the same name and keeps the girl length, loop and events', () => {
-    const files = withPartnerClips([{ path: 'a', clips: [clip('idle', ['body']), clip('other', ['body'])] }], [{ path: 'b', clips: [clip('idle', ['player', 'head'])] }], partner);
+  it('joins the male clip of the same name and keeps the girl length, loop and events', () => {
+    const files = withMaleClips([{ path: 'a', clips: [clip('idle', ['body']), clip('other', ['body'])] }], [{ path: 'b', clips: [clip('idle', ['player', 'head'])] }], male);
     const [idle, other] = files[0].clips;
 
-    expect(idle.channels.map(c => c.target)).toEqual(['body', 'steve', 'partner:head']);
+    expect(idle.channels.map(c => c.target)).toEqual(['body', 'steve', 'male:head']);
     expect(idle.events).toHaveLength(1);
     expect(other.channels.map(c => c.target)).toEqual(['body']);
   });

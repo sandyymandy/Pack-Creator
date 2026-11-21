@@ -244,8 +244,8 @@ export interface SimFiles {
   dressed: string | null;
   texture: string | null;
   animations: string[];
-  /** The partner's clip files, for a scene in the new layout. */
-  partner_animations: string[];
+  /** The male's clip files, for a scene in the new layout. */
+  male_animations: string[];
   bindings: string | null;
   sounds_json: string[];
 }
