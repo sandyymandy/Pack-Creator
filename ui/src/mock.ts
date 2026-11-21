@@ -179,6 +179,8 @@ export async function mock(command: string, args: Args = {}): Promise<unknown> {
     case 'old_pack_cues': return delay([{ token: 'thrust', count: 4 }, { token: 'hugmoan', count: 2 }]);
     case 'find_profiles': return delay([null, null]);
     case 'old_pack_look': return delay({ id: args.girl, models: ['nude', 'dressed'], texture: true, clips: ['idle', 'walk', 'doggy_intro', 'doggy_slow', 'doggy_fast', 'doggy_cum', 'ride_slow', 'ride_fast', 'wave'], scenes: [{ name: 'Doggy', scene_type: 'on_bed', parts: { intro: ['doggy_intro'], slow: ['doggy_slow'], fast: ['doggy_fast'], cum: ['doggy_cum'] } }, { name: 'Ride', scene_type: 'on_player', parts: { slow: ['ride_slow'], fast: ['ride_fast'] } }, { name: 'Wave', scene_type: 'stationary', parts: { loop: ['wave'] } }], scenes_from: 'names', files_layout: false, bones: ['root', 'body', 'head', 'boobL', 'boobR'] });
+    case 'skeleton_plan': return { assignments: [], groups: [{ id: 'pleasurehorizons:jenny', models: ['jenny', 'amber'], animations: 4 }], unreadable: [] };
+    case 'skeleton_apply': return { written: 6, already: 0, failed: [] };
     case 'old_pack_model': return mock('read_model', {});
     case 'old_pack_texture': return delay('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
     case 'old_pack_clips': return Promise.all(['idle', 'walk', 'doggy_intro', 'doggy_slow', 'doggy_fast', 'doggy_cum', 'ride_slow', 'ride_fast', 'wave'].map(async name => ({ ...((await mock('read_animation', {})) as { name: string }[])[0], name })));

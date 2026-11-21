@@ -321,3 +321,8 @@ export interface SceneScope {
   body_types: string[];
   files: { rel: string; owner_kind: 'girl' | 'skeleton' | 'shared'; owner: string }[];
 }
+
+export interface SkeletonAssignment { rel: string; kind: 'model' | 'animation'; owner: string; id: string; current: string | null }
+export interface SkeletonGroup { id: string; models: string[]; animations: number }
+export interface SkeletonPlan { assignments: SkeletonAssignment[]; groups: SkeletonGroup[]; unreadable: string[] }
+export interface SkeletonWritten { written: number; already: number; failed: string[] }

@@ -270,6 +270,81 @@ fn parse(bytes: &[u8]) -> Result<Parsed, String> {
     Ok(Parsed { version_and_flags: [(version & 0xFF) as u8, (version >> 8) as u8, (flags & 0xFF) as u8, (flags >> 8) as u8], fingerprint_and_rest: rest, strings, clips, spans })
 }
 
+/// The header flag that says the file names the skeleton its clips were made for.
+const FLAG_SKELETON_ID: u16 = 1;
+/// Where, in the file, the string-table index of that id sits (the first two of the twelve reserved header bytes, after the 4-byte fingerprint).
+const SKELETON_INDEX_AT: usize = 20;
+
+/// The skeleton id the clips of this file were made for (`mymod:creature_a`), or None when the file names none.
+pub fn skeleton_id(bytes: &[u8]) -> Result<Option<String>, String> {
+    let parsed = parse(bytes)?;
+    let flags = u16::from_le_bytes([parsed.version_and_flags[2], parsed.version_and_flags[3]]);
+
+    if flags & FLAG_SKELETON_ID == 0 {
+        return Ok(None);
+    }
+
+    let index = u16::from_le_bytes([parsed.fingerprint_and_rest[SKELETON_INDEX_AT - 16], parsed.fingerprint_and_rest[SKELETON_INDEX_AT - 16 + 1]]) as usize;
+
+    parsed.strings.get(index).cloned().map(Some).ok_or_else(|| format!("the file names its skeleton by string {index}, but it has {} strings", parsed.strings.len()))
+}
+
+/// Writes the file again with the skeleton id set (or taken away with None). The id is added to the string table (or found in it) and the header says where; every clip is
+/// copied byte for byte.
+pub fn set_skeleton_id(bytes: &[u8], id: Option<&str>) -> Result<Vec<u8>, String> {
+    let parsed = parse(bytes)?;
+    let mut strings = parsed.strings.clone();
+    let mut flags = u16::from_le_bytes([parsed.version_and_flags[2], parsed.version_and_flags[3]]);
+    let mut rest = parsed.fingerprint_and_rest.clone();
+
+    match id {
+        Some(id) => {
+            if id.is_empty() || id.len() > 0xFFFF || strings.len() >= 0xFFFF {
+                return Err("a skeleton id has to be between 1 and 65535 bytes".into());
+            }
+
+            let index = match strings.iter().position(|s| s == id) {
+                Some(at) => at,
+                None => {
+                    strings.push(id.to_string());
+                    strings.len() - 1
+                }
+            };
+
+            flags |= FLAG_SKELETON_ID;
+            rest[SKELETON_INDEX_AT - 16..SKELETON_INDEX_AT - 14].copy_from_slice(&(index as u16).to_le_bytes());
+        }
+        None => {
+            flags &= !FLAG_SKELETON_ID;
+            rest[SKELETON_INDEX_AT - 16..SKELETON_INDEX_AT - 14].copy_from_slice(&[0, 0]);
+        }
+    }
+
+    let mut table: Vec<u8> = Vec::new();
+
+    for value in &strings {
+        table.extend_from_slice(&(value.len() as u16).to_le_bytes());
+        table.extend_from_slice(value.as_bytes());
+    }
+
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len() + 64);
+
+    out.extend_from_slice(MAGIC);
+    out.extend_from_slice(&parsed.version_and_flags[..2]);
+    out.extend_from_slice(&flags.to_le_bytes());
+    out.extend_from_slice(&(strings.len() as u16).to_le_bytes());
+    out.extend_from_slice(&(table.len() as u32).to_le_bytes());
+    out.extend_from_slice(&(parsed.clips.len() as u16).to_le_bytes());
+    out.extend_from_slice(&rest);
+    out.extend_from_slice(&table);
+
+    if let Some(first) = parsed.spans.first() {
+        out.extend_from_slice(&bytes[first.start..parsed.spans.last().map_or(first.start, |l| l.end)]);
+    }
+
+    Ok(out)
+}
+
 /// The events one clip should have after an edit.
 pub struct ClipEvents {
     pub clip: String,
@@ -428,6 +503,33 @@ mod tests {
         }
 
         found
+    }
+
+    #[test]
+    fn a_skeleton_id_is_written_read_and_removed_without_touching_the_clips() {
+        let Some(path) = games_animations().into_iter().next() else { return };
+        let bytes = std::fs::read(&path).unwrap();
+        let clips = read(&bytes).unwrap();
+        let with = set_skeleton_id(&bytes, Some("pleasurehorizons:jenny")).unwrap();
+
+        assert_eq!(skeleton_id(&bytes).unwrap(), None);
+        assert_eq!(skeleton_id(&with).unwrap().as_deref(), Some("pleasurehorizons:jenny"));
+        assert_eq!(read(&with).unwrap(), clips);
+
+        /* The fingerprint stays as it was, and a later cue edit keeps the id. */
+        assert_eq!(&with[16..20], &bytes[16..20]);
+
+        let edited = edit_events(&with, &[ClipEvents { clip: clips[0].name.clone(), events: clips[0].events.clone() }]).unwrap();
+
+        assert_eq!(skeleton_id(&edited).unwrap().as_deref(), Some("pleasurehorizons:jenny"));
+
+        let changed = set_skeleton_id(&with, Some("pleasurehorizons:bia")).unwrap();
+
+        assert_eq!(skeleton_id(&changed).unwrap().as_deref(), Some("pleasurehorizons:bia"));
+        assert_eq!(read(&changed).unwrap(), clips);
+        assert_eq!(set_skeleton_id(&with, None).unwrap().len(), set_skeleton_id(&with, None).unwrap().len());
+        assert_eq!(skeleton_id(&set_skeleton_id(&with, None).unwrap()).unwrap(), None);
+        assert!(set_skeleton_id(&bytes, Some("")).is_err());
     }
 
     #[test]

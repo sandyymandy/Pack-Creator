@@ -21,6 +21,7 @@ pub mod reference;
 pub mod scope;
 pub mod review;
 pub mod schema;
+pub mod skeleton_ids;
 pub mod social;
 #[cfg(test)]
 mod test_pack;

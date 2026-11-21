@@ -128,6 +128,8 @@ pub struct Offsets {
     pub cubes: Vec<CubeAt>,
     /// Where each armature's parent group bone index sits.
     pub armature_parents: Vec<usize>,
+    /// Where the extension sections start (the count of them when the file has any), which is the end of the file when it has none.
+    pub extensions_at: usize,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -145,6 +147,8 @@ pub struct Model {
     pub armatures: Vec<Armature>,
     /// The names of the extension sections the file carries (`strut_physics:physics`).
     pub extensions: Vec<String>,
+    /// The skeleton id (`mymod:creature_a`) from the `strut:skeleton` extension: which rig this model is. None when the model has none.
+    pub skeleton_id: Option<String>,
     /// Where each bone's and cube's numbers are in the file. Not part of what the viewer is sent.
     #[serde(skip)]
     pub offsets: Offsets,
@@ -413,20 +417,96 @@ pub fn read(bytes: &[u8]) -> Result<Model, String> {
     }
 
     let mut extensions = Vec::new();
+    let mut skeleton_id = None;
+
+    offsets.extensions_at = r.at;
 
     if flags & 1 != 0 {
         let count = r.u16("the extension count")?;
 
         for _ in 0..count {
-            extensions.push(r.string("an extension name")?);
-
+            let name = r.string("an extension name")?;
             let length = r.u32("an extension length")? as usize;
+            let payload = r.take(length, "an extension")?;
 
-            r.take(length, "an extension")?;
+            if name == SKELETON_EXTENSION {
+                skeleton_id = skeleton_from(payload);
+            }
+
+            extensions.push(name);
         }
     }
 
-    Ok(Model { version, units_per_block: units, bounds_min, bounds_max, textures, group_bones, meshes, cubes, armature_count, armatures, extensions, offsets })
+    Ok(Model { version, units_per_block: units, bounds_min, bounds_max, textures, group_bones, meshes, cubes, armature_count, armatures, extensions, skeleton_id, offsets })
+}
+
+/// The extension section that holds a model's skeleton id.
+pub const SKELETON_EXTENSION: &str = "strut:skeleton";
+
+/// The id in the section's payload: a `uint16` length and that many UTF-8 bytes. An empty or cut-short payload is no id, as in Strut.
+fn skeleton_from(payload: &[u8]) -> Option<String> {
+    if payload.len() < 2 {
+        return None;
+    }
+
+    let length = u16::from_le_bytes([payload[0], payload[1]]) as usize;
+
+    if length == 0 || payload.len() < 2 + length {
+        return None;
+    }
+
+    Some(String::from_utf8_lossy(&payload[2..2 + length]).to_string())
+}
+
+/// Writes the model again with its skeleton id set (or taken away with None). Only the extension sections change: every other byte is copied as it was, and the other
+/// sections (physics, for one) keep their order and contents.
+pub fn set_skeleton_id(bytes: &[u8], id: Option<&str>) -> Result<Vec<u8>, String> {
+    let model = read(bytes)?;
+    let flags = u16::from_le_bytes([bytes[6], bytes[7]]);
+    let mut sections: Vec<(String, Vec<u8>)> = Vec::new();
+
+    if flags & 1 != 0 {
+        let mut r = Reader { bytes, at: model.offsets.extensions_at };
+        let count = r.u16("the extension count")?;
+
+        for _ in 0..count {
+            let name = r.string("an extension name")?;
+            let length = r.u32("an extension length")? as usize;
+
+            sections.push((name, r.take(length, "an extension")?.to_vec()));
+        }
+    }
+
+    sections.retain(|(name, _)| name != SKELETON_EXTENSION);
+
+    if let Some(id) = id {
+        if id.is_empty() || id.len() > 0xFFFF {
+            return Err("a skeleton id has to be between 1 and 65535 bytes".into());
+        }
+
+        let mut payload = (id.len() as u16).to_le_bytes().to_vec();
+
+        payload.extend_from_slice(id.as_bytes());
+        sections.insert(0, (SKELETON_EXTENSION.to_string(), payload));
+    }
+
+    let mut out = bytes[..model.offsets.extensions_at].to_vec();
+    let flags = if sections.is_empty() { flags & !1 } else { flags | 1 };
+
+    out[6..8].copy_from_slice(&flags.to_le_bytes());
+
+    if !sections.is_empty() {
+        out.extend_from_slice(&(sections.len() as u16).to_le_bytes());
+
+        for (name, payload) in &sections {
+            out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+            out.extend_from_slice(name.as_bytes());
+            out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+            out.extend_from_slice(payload);
+        }
+    }
+
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -443,6 +523,51 @@ mod tests {
 
         short.extend([101, 0]);
         assert!(read(&short).unwrap_err().contains("ends"));
+    }
+
+    #[test]
+    fn a_skeleton_id_is_written_read_and_removed_without_touching_the_rest() {
+        let Some(path) = games_model() else { return };
+        let bytes = std::fs::read(&path).unwrap();
+        let before = read(&bytes).unwrap();
+        let with = set_skeleton_id(&bytes, Some("pleasurehorizons:jenny")).unwrap();
+        let after = read(&with).unwrap();
+
+        assert_eq!(after.skeleton_id.as_deref(), Some("pleasurehorizons:jenny"));
+        assert_eq!(after.group_bones, before.group_bones);
+        assert_eq!(after.cubes, before.cubes);
+        assert_eq!(after.meshes, before.meshes);
+        assert!(after.extensions.iter().filter(|e| *e == SKELETON_EXTENSION).count() == 1);
+
+        let changed = set_skeleton_id(&with, Some("pleasurehorizons:bia")).unwrap();
+
+        assert_eq!(read(&changed).unwrap().skeleton_id.as_deref(), Some("pleasurehorizons:bia"));
+        assert_eq!(read(&changed).unwrap().extensions.len(), after.extensions.len());
+
+        let without = set_skeleton_id(&with, None).unwrap();
+
+        assert_eq!(read(&without).unwrap().skeleton_id, None);
+        assert_eq!(without, set_skeleton_id(&bytes, None).unwrap());
+        assert!(set_skeleton_id(&bytes, Some("")).is_err());
+    }
+
+    fn games_model() -> Option<PathBuf> {
+        let folder = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../src/main/resources/assets/pleasurehorizons/strut/models");
+        let mut stack = vec![folder];
+
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(dir).ok()?.flatten() {
+                let path = entry.path();
+
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.extension().map_or(false, |e| e == "strutmodel") {
+                    return Some(path);
+                }
+            }
+        }
+
+        None
     }
 
     #[test]

@@ -952,6 +952,23 @@ fn fix_arms(app: State<App>, rel: String, apply: bool) -> Reply<pc_core::arm_fix
     Ok(report)
 }
 
+/// The skeleton id every model and animation file of the pack should have, and the grouping of them. `choices` maps a girl or skeleton to an id a person picked instead.
+#[tauri::command(async)]
+fn skeleton_plan(app: State<App>, choices: std::collections::BTreeMap<String, String>) -> Reply<pc_core::skeleton_ids::Plan> {
+    let (root, _) = app.open()?;
+
+    Ok(pc_core::skeleton_ids::plan(&root, &choices))
+}
+
+/// Writes the skeleton ids of the plan (made with the same `choices`) into the models and animation files, keeping a copy of each original in `.packcreator/backups`.
+#[tauri::command(async)]
+fn skeleton_apply(app: State<App>, choices: std::collections::BTreeMap<String, String>) -> Reply<pc_core::skeleton_ids::Written> {
+    let (root, _) = app.open()?;
+    let plan = pc_core::skeleton_ids::plan(&root, &choices);
+
+    pc_core::skeleton_ids::apply(&root, &plan.assignments).map_err(text)
+}
+
 /// Removes clips from an animation file. A copy of the file as it was is kept in the project's `.packcreator/backups` folder, and the new file must read back before it replaces the old.
 #[tauri::command(async)]
 fn delete_clips(app: State<App>, rel: String, clips: Vec<String>) -> Reply<Vec<pc_core::strut_anim::Clip>> {
@@ -1560,6 +1577,8 @@ fn main() {
             read_image,
             write_file,
             fix_arms,
+            skeleton_plan,
+            skeleton_apply,
             file_history,
             read_version,
             check_text,
