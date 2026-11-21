@@ -15,6 +15,7 @@ pub mod import;
 pub mod json_ast;
 pub mod layout;
 pub mod oldpack;
+pub mod pose;
 pub mod project;
 pub mod recent;
 pub mod reference;
