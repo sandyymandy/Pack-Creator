@@ -16,6 +16,7 @@ pub mod import;
 pub mod json_ast;
 pub mod layout;
 pub mod oldpack;
+pub mod pack_split;
 pub mod pose;
 pub mod project;
 pub mod scene_split;
