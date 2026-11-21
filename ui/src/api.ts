@@ -1,4 +1,4 @@
-import type { SkeletonPlan, SkeletonWritten, SceneScope, GirlLook, ScenePlan, ArmFixReport, SearchHit, SimFiles, SimGirl, BlockbenchStatus, FileVersion, GameLogView, ClipData, CueEvent, ModelData, ViewerFiles, ImportResult, Choices, Reference, Content, Diagnostic, Entry, Located, NewFile, NewProject, Opened, RecentView, Written } from './types';
+import type { SplitReport, SkeletonPlan, SkeletonWritten, SceneScope, GirlLook, ScenePlan, ArmFixReport, SearchHit, SimFiles, SimGirl, BlockbenchStatus, FileVersion, GameLogView, ClipData, CueEvent, ModelData, ViewerFiles, ImportResult, Choices, Reference, Content, Diagnostic, Entry, Located, NewFile, NewProject, Opened, RecentView, Written } from './types';
 import { mock } from './mock';
 
 /** Whether the page runs inside the Pack Creator's window. In a plain browser (for developing the page) a small in-memory stand-in answers instead. */
@@ -59,6 +59,8 @@ export const api = {
   readModel: (rel: string) => call<ModelData>('read_model', { rel }),
   skeletonPlan: (choices: Record<string, string>) => call<SkeletonPlan>('skeleton_plan', { choices }),
   skeletonApply: (choices: Record<string, string>) => call<SkeletonWritten>('skeleton_apply', { choices }),
+  splitScenes: (apply: boolean) => call<SplitReport>('split_scenes', { apply }),
+  undoSplitScenes: (stamp: string) => call<number>('undo_split_scenes', { stamp }),
   fixArms: (rel: string, apply: boolean) => call<ArmFixReport>('fix_arms', { rel, apply }),
   /** Puts the basic soft bones (chest, belly, cheeks, ass: those the model has, by name) in a model's physics file. */
   addBasicPhysics: (rel: string) => call<{ path: string; added: string[] }>('add_basic_physics', { rel }),

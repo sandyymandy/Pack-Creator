@@ -969,6 +969,22 @@ fn skeleton_apply(app: State<App>, choices: std::collections::BTreeMap<String, S
     pc_core::skeleton_ids::apply(&root, &plan.assignments).map_err(text)
 }
 
+/// Converts the pack to one model per participant (see `pc_core::pack_split`). With `apply` false it only says what it would do.
+#[tauri::command(async)]
+fn split_scenes(app: State<App>, apply: bool) -> Reply<pc_core::pack_split::Report> {
+    let (root, _) = app.open()?;
+
+    pc_core::pack_split::split_pack(&root, apply).map_err(text)
+}
+
+/// Puts back what a conversion (named by its stamp) changed.
+#[tauri::command(async)]
+fn undo_split_scenes(app: State<App>, stamp: String) -> Reply<usize> {
+    let (root, _) = app.open()?;
+
+    pc_core::pack_split::undo_split(&root, &stamp).map_err(text)
+}
+
 /// Removes clips from an animation file. A copy of the file as it was is kept in the project's `.packcreator/backups` folder, and the new file must read back before it replaces the old.
 #[tauri::command(async)]
 fn delete_clips(app: State<App>, rel: String, clips: Vec<String>) -> Reply<Vec<pc_core::strut_anim::Clip>> {
@@ -1579,6 +1595,8 @@ fn main() {
             fix_arms,
             skeleton_plan,
             skeleton_apply,
+            split_scenes,
+            undo_split_scenes,
             file_history,
             read_version,
             check_text,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { api, pickFolder, pickSavePath } from './api';
 import { BlockbenchDialog } from './BlockbenchDialog';
 import { SkeletonDialog } from './SkeletonDialog';
+import { SplitDialog } from './SplitDialog';
 import { DocsDialog } from './DocsDialog';
 import { GameLogDialog } from './GameLogDialog';
 import { HistoryDialog } from './HistoryDialog';
@@ -52,6 +53,7 @@ type Dialog =
   | { type: 'scope'; focus?: string }
   | { type: 'blockbench' }
   | { type: 'skeletons' }
+  | { type: 'split' }
   | { type: 'gamelog' }
   | { type: 'docs'; start?: string }
   | { type: 'settings' }
@@ -854,6 +856,7 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
         <IconButton tour="export" icon="export" tip="Export the pack as a zip to share" onClick={() => void exportZip()} />
         <IconButton icon="layers" tip="Who each scene is for: one girl, or every girl on a skeleton" onClick={() => setDialog({ type: 'scope' })} />
         <IconButton icon="cube" tip="Skeleton ids: which rig each model and animation file is made for" onClick={() => setDialog({ type: 'skeletons' })} />
+        <IconButton icon="layers" tip="Split scenes: one model per participant, in place (can be undone)" onClick={() => setDialog({ type: 'split' })} />
         <IconButton tour="import" icon="import" tip="Import an old girl from her resource pack or profile" onClick={() => setDialog({ type: 'import' })} />
         <span class="bar-sep" />
         <IconButton tour="blockbench" icon="cube" tip="Blockbench: install it or open it with the Strut Toolkit" onClick={() => setDialog({ type: 'blockbench' })} />
@@ -1028,6 +1031,7 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
       {dialog?.type === 'docs' && <DocsDialog start={dialog.start} onClose={() => setDialog(null)} onTour={() => { setDialog(null); setTouring(true); }} />}
       {touring && <Tour steps={workspaceSteps(page => { endTour(false); setDialog({ type: 'docs', start: page }); })} onDone={() => endTour(false)} onSkip={() => endTour(true)} />}
       {dialog?.type === 'gamelog' && <GameLogDialog onClose={() => setDialog(null)} onOpen={rel => void openFile(rel)} />}
+      {dialog?.type === 'split' && <SplitDialog onClose={() => setDialog(null)} />}
       {dialog?.type === 'skeletons' && <SkeletonDialog onClose={() => setDialog(null)} />}
       {dialog?.type === 'blockbench' && <BlockbenchDialog onClose={() => setDialog(null)} />}
       {dialog?.type === 'report' && <ImportReport result={dialog.result} onClose={() => setDialog(null)} onOpen={() => { const rel = dialog.result.girl; setDialog(null); void openFile(rel); }} />}
