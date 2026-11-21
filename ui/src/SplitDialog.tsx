@@ -55,8 +55,8 @@ export function SplitDialog({ onClose }: { onClose: () => void }) {
             {done ? 'Done: ' : 'This would convert '}
             <strong>{shown.scenes}</strong> scenes, write {shown.files_written} files, replace {shown.files_removed} old scene files and take the partner rig out of {shown.models_stripped} models.
           </p>
-          {shown.partners.map(p => <p class="muted" style="margin:0" key={p.rel}>{p.id}: {p.girls.length} {p.girls.length === 1 ? 'girl' : 'girls'}</p>)}
-          {shown.differences.length > 0 && <details><summary>{shown.differences.length} girls have a partner rig that differs</summary>{shown.differences.map(d => <p class="muted" key={d} style="margin:2px 0">{d}</p>)}</details>}
+          {shown.dropped_bones.length > 0 && <details><summary>{shown.dropped_bones.length} old partner bones have no counterpart (their animation is dropped)</summary>{shown.dropped_bones.map(([bone, files]) => <p class="muted" key={bone} style="margin:2px 0">{bone}: animated in {files} files</p>)}</details>}
+          {shown.approximate.length > 0 && <details><summary>{shown.approximate.length} partner bones are mapped as closely as the new model allows</summary>{shown.approximate.map(([bone, by]) => <p class="muted" key={bone} style="margin:2px 0">{bone}: up to {by.toFixed(2)} off</p>)}</details>}
           {shown.skipped.length > 0 && <details open><summary>{shown.skipped.length} files left as they are</summary>{shown.skipped.map(d => <p class="muted" key={d} style="margin:2px 0">{d}</p>)}</details>}
           {shown.findings.length > 0 && <details><summary>{shown.findings.length} notes</summary>{shown.findings.map(d => <p class="muted" key={d} style="margin:2px 0">{d}</p>)}</details>}
         </div>

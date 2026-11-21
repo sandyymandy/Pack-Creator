@@ -327,4 +327,4 @@ export interface SkeletonGroup { id: string; models: string[]; animations: numbe
 export interface SkeletonPlan { assignments: SkeletonAssignment[]; groups: SkeletonGroup[]; unreadable: string[] }
 export interface SkeletonWritten { written: number; already: number; failed: string[] }
 
-export interface SplitReport { applied: boolean; stamp: string | null; scenes: number; files_written: number; files_removed: number; models_stripped: number; partners: { rel: string; id: string; girls: string[] }[]; differences: string[]; skipped: string[]; findings: string[] }
+export interface SplitReport { applied: boolean; stamp: string | null; scenes: number; files_written: number; files_removed: number; models_stripped: number; dropped_bones: [string, number][]; approximate: [string, number][]; skipped: string[]; findings: string[] }

@@ -327,3 +327,56 @@ mod probe {
         }
     }
 }
+
+#[cfg(test)]
+mod compare_probe {
+    fn dump(path: &str) -> Vec<String> {
+        let m = crate::strut_model::read(&std::fs::read(path).unwrap()).unwrap();
+        m.group_bones.iter().map(|b| {
+            let parent = if b.parent_index >= 0 { m.group_bones[b.parent_index as usize].name.clone() } else { "-".into() };
+            let cubes: Vec<String> = b.elements.iter().filter(|e| e.kind == 1).map(|e| { let c = &m.cubes[e.index as usize]; format!("{:?}->{:?}", c.from, c.to) }).collect();
+            format!("{}|{}|{:?}|{:?}|{}", b.name, parent, b.pivot, b.rotation, cubes.join(" ; "))
+        }).collect()
+    }
+    #[test]
+    #[ignore]
+    fn old_and_new_player() {
+        let out = std::env::var("PROBE_OUT").unwrap();
+        for (tag, path) in [("old", r"C:\Users\Sandyy\Downloads\model.strutmodel"), ("new", r"C:\Users\Sandyy\Documents\Idea Projects\Pleasure Horizons\src\main\resources\assets\pleasurehorizons\strut\models\nude\player.strutmodel")] {
+            std::fs::write(format!("{out}/{tag}.txt"), dump(path).join("\n")).unwrap();
+        }
+    }
+}
+
+#[cfg(test)]
+mod usage_probe {
+    #[test]
+    #[ignore]
+    fn partner_channels() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test_pack/data/pleasurehorizons/asset_sync/strut/animations/scenes");
+        let m = crate::strut_model::read(&std::fs::read(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test_pack/data/pleasurehorizons/asset_sync/strut/models/nude/jenny.strutmodel")).unwrap()).unwrap();
+        let steve: std::collections::HashSet<String> = crate::scene_split::subtree(&m, "steve").into_iter().map(|i| m.group_bones[i].name.clone()).collect();
+        let mut counts: std::collections::BTreeMap<String, usize> = Default::default();
+        let mut files = 0;
+        for e in std::fs::read_dir(root).unwrap().flatten() {
+            let Ok(clips) = crate::strut_anim::read(&std::fs::read(e.path()).unwrap()) else { continue };
+            files += 1;
+            let mut seen = std::collections::BTreeSet::new();
+            for c in clips { for ch in c.channels { if steve.contains(&ch.target) { seen.insert(format!("{}.{}", ch.target, ch.property)); } } }
+            for s in seen { *counts.entry(s).or_default() += 1; }
+        }
+        println!("USAGE files={files}");
+        for (k, v) in counts { println!("USAGE {k} {v}"); }
+    }
+}
+
+#[cfg(test)]
+mod player_probe {
+    #[test]
+    #[ignore]
+    fn player_id() {
+        let b = std::fs::read(r"C:\Users\Sandyy\Documents\Idea Projects\Pleasure Horizons\src\main\resources\assets\pleasurehorizons\strut\models\nude\player.strutmodel").unwrap();
+        let m = crate::strut_model::read(&b).unwrap();
+        println!("PLAYER id={:?} ext={:?} units={} bytes={} textures={:?}", m.skeleton_id, m.extensions, m.units_per_block, b.len(), m.textures.iter().map(|t| t.name.clone()).collect::<Vec<_>>());
+    }
+}
