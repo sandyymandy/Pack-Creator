@@ -232,8 +232,8 @@ export async function mock(command: string, args: Args = {}): Promise<unknown> {
     case 'save_clip_events': return delay([]);
     case 'delete_clips': return delay([]);
     case 'scene_scopes': return delay([
-      { id: 'hug', file: 'data/pleasurehorizons/scenes/hug.json', supported_girls: ['amber'], body_types: ['jenny'], files: [{ rel: 'data/pleasurehorizons/asset_sync/strut/animations/scenes/hug-amber.strutanim', owner_kind: 'girl', owner: 'amber' }] },
-      { id: 'doggy', file: 'data/pleasurehorizons/scenes/doggy.json', supported_girls: [], body_types: ['jenny'], files: [{ rel: 'data/pleasurehorizons/asset_sync/strut/animations/scenes/doggy.jenny.strutanim', owner_kind: 'skeleton', owner: 'jenny' }] }
+      { id: 'hug', file: 'data/pleasurehorizons/scenes/hug.json', supported_girls: ['amber'], body_types: ['jenny'], files: [{ rel: 'data/pleasurehorizons/asset_sync/strut/animations/scenes/hug-amber.strutanim', character_kind: 'girl', character: 'amber' }] },
+      { id: 'doggy', file: 'data/pleasurehorizons/scenes/doggy.json', supported_girls: [], body_types: ['jenny'], files: [{ rel: 'data/pleasurehorizons/asset_sync/strut/animations/scenes/doggy.jenny.strutanim', character_kind: 'skeleton', character: 'jenny' }] }
     ]);
     case 'scene_make_skeleton_wide': case 'scene_make_girl_specific': return delay(['Done (mock).']);
     case 'read_animation': return delay([{

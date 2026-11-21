@@ -53,12 +53,12 @@ export function ScopeDialog({ focus, onClose, onChanged }: { focus?: string; onC
     const problems: string[] = [];
 
     for (const scene of scenes) {
-      for (const file of scene.files.filter(f => f.owner_kind === 'girl')) {
+      for (const file of scene.files.filter(f => f.character_kind === 'girl')) {
         try {
-          await api.sceneMakeSkeletonWide(scene.id, file.owner);
+          await api.sceneMakeSkeletonWide(scene.id, file.character);
           done++;
         } catch (error) {
-          problems.push(`${scene.id} (${file.owner}): ${messageOf(error)}`);
+          problems.push(`${scene.id} (${file.character}): ${messageOf(error)}`);
         }
       }
     }
@@ -70,7 +70,7 @@ export function ScopeDialog({ focus, onClose, onChanged }: { focus?: string; onC
   };
 
   const shown = scenes.filter(s => s.id.includes(filter.trim().toLowerCase()));
-  const aloneCount = scenes.reduce((n, s) => n + s.files.filter(f => f.owner_kind === 'girl').length, 0);
+  const aloneCount = scenes.reduce((n, s) => n + s.files.filter(f => f.character_kind === 'girl').length, 0);
 
   return (
     <Dialog title="Who each scene is for" onClose={onClose}>
@@ -93,13 +93,13 @@ export function ScopeDialog({ focus, onClose, onChanged }: { focus?: string; onC
               {scene.files.map(file => (
                 <div class="scope-file" key={file.rel}>
                   <span class="row-name" title={file.rel}>{file.rel.slice(file.rel.lastIndexOf('/') + 1)}</span>
-                  <span class="muted">{file.owner_kind === 'girl' ? `${file.owner} only` : file.owner_kind === 'skeleton' ? `every ${file.owner} girl` : 'everyone'}</span>
-                  {file.owner_kind === 'girl' && <button class="btn small" disabled={busy} onClick={() => void run(() => api.sceneMakeSkeletonWide(scene.id, file.owner))}>Make skeleton-wide</button>}
-                  {file.owner_kind !== 'girl' && (
+                  <span class="muted">{file.character_kind === 'girl' ? `${file.character} only` : file.character_kind === 'skeleton' ? `every ${file.character} girl` : 'everyone'}</span>
+                  {file.character_kind === 'girl' && <button class="btn small" disabled={busy} onClick={() => void run(() => api.sceneMakeSkeletonWide(scene.id, file.character))}>Make skeleton-wide</button>}
+                  {file.character_kind !== 'girl' && (
                     <>
                       <select class="input small-select" value={pick[file.rel] ?? ''} onChange={e => setPick(previous => ({ ...previous, [file.rel]: (e.target as HTMLSelectElement).value }))}>
                         <option value="">Only for…</option>
-                        {girls.filter(g => file.owner_kind === 'shared' || g.body_type === file.owner).map(g => <option key={g.id} value={g.id}>{g.id}</option>)}
+                        {girls.filter(g => file.character_kind === 'shared' || g.body_type === file.character).map(g => <option key={g.id} value={g.id}>{g.id}</option>)}
                       </select>
                       <button class="btn small" disabled={busy || !pick[file.rel]} onClick={() => void run(() => api.sceneMakeGirlSpecific(scene.id, pick[file.rel], keep))}>Make hers only</button>
                     </>

@@ -773,13 +773,14 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
     if find(format!("/strut/scenes/{scene_id}.strutscene")).is_some() {
         let skeleton = skeleton_path(&root, from_zip, find_either(pc_core::paths::girl_model("nude", &girl_id), pc_core::paths::girl_model_old("nude", &girl_id)).or_else(|| find_either(pc_core::paths::girl_model("dressed", &girl_id), pc_core::paths::girl_model_old("dressed", &girl_id))), body_type.as_deref());
 
+        order.push(format!("/strut/animations/scenes/{scene_id}/host/characters/{girl_id}.strutanim"));
         order.push(format!("/strut/animations/scenes/{scene_id}/host/owners/{girl_id}.strutanim"));
 
         if let Some(skeleton) = skeleton {
             order.push(format!("/strut/animations/scenes/{scene_id}/host/skeletons/{skeleton}.strutanim"));
         }
 
-        for suffix in [format!("/strut/animations/scenes/{scene_id}/male/owners/{girl_id}.strutanim"), format!("/strut/animations/scenes/{scene_id}/male/skeletons/male.strutanim")] {
+        for suffix in [format!("/strut/animations/scenes/{scene_id}/male/characters/{girl_id}.strutanim"), format!("/strut/animations/scenes/{scene_id}/male/owners/{girl_id}.strutanim"), format!("/strut/animations/scenes/{scene_id}/male/skeletons/male.strutanim")] {
             if let Some(found) = find(suffix) {
                 male_animations.push(found);
             }
@@ -794,6 +795,7 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
 
     order.push(format!("/strut/animations/scenes/{scene_id}.strutanim"));
     /* Her everyday clips: her own file, her skeleton's (the clip set `base`), then the older single files. */
+    order.push(format!("/strut/animations/base/characters/{girl_id}.strutanim"));
     order.push(format!("/strut/animations/base/owners/{girl_id}.strutanim"));
 
     if let Some(skeleton) = skeleton_path(&root, from_zip, find_either(pc_core::paths::girl_model("nude", &girl_id), pc_core::paths::girl_model_old("nude", &girl_id)).or_else(|| find_either(pc_core::paths::girl_model("dressed", &girl_id), pc_core::paths::girl_model_old("dressed", &girl_id))), body_type.as_deref()) {
@@ -841,7 +843,7 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
                 layers.extend(find(format!("/strut/event_bindings/skeletons/{skeleton}.json")));
             }
 
-            layers.extend(find(format!("/strut/event_bindings/owners/{girl_id}.json")));
+            layers.extend(find(format!("/strut/event_bindings/characters/{girl_id}.json")).or_else(|| find(format!("/strut/event_bindings/owners/{girl_id}.json"))));
             layers
         },
         bindings: find(format!("/strut/event_bindings/girls/{girl_id}.json")),
@@ -979,7 +981,7 @@ fn viewer_files(app: State<App>, rel: String) -> Reply<ViewerFiles> {
         .filter(|f| {
             let n = f.rsplit('/').next().unwrap_or("");
 
-            n == format!("{id}.strutanim") && f.contains("/animations/base/owners/") || n == format!("base.{id}.strutanim") || n.ends_with(&format!("-{id}.strutanim")) || n == "base.strutanim" || f.contains(&format!("/scenes/")) && f.contains(&format!("/owners/{id}.strutanim"))
+            n == format!("{id}.strutanim") && f.contains("/animations/base/characters/") || n == format!("base.{id}.strutanim") || n.ends_with(&format!("-{id}.strutanim")) || n == "base.strutanim" || f.contains(&format!("/scenes/")) && f.contains(&format!("/characters/{id}.strutanim"))
         })
         .cloned()
         .collect();

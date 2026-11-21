@@ -11,14 +11,14 @@ A scene called `cowgirl` is these files:
 ```
 strut/scenes/cowgirl.strutscene                                       the layout: who fills which role
 strut/animations/scenes/cowgirl/host/skeletons/jenny.strutanim        the girl's clips, for every model with the skeleton pleasurehorizons:jenny
-strut/animations/scenes/cowgirl/host/owners/momo.strutanim            only what Momo does differently
+strut/animations/scenes/cowgirl/host/characters/momo.strutanim            only what Momo does differently
 strut/animations/scenes/cowgirl/male/skeletons/male.strutanim   the male's clips
 ```
 
 - A **role** is a part in the scene: `host` (the girl) and `male`. Each has a folder of animation files.
-- A **skeleton** file is played by every model with that skeleton id. An **owner** file is played by one girl and holds only the clips she changes.
+- A **skeleton** file is played by every model with that skeleton id. An **character** file is played by one girl and holds only the clips she changes.
 - **Her own file wins over her skeleton's.** A clip is looked up in her file first and in her skeleton's second; the first one that has it plays.
-- The male's clips usually do not change from girl to girl, so one file serves everyone. When a scene moves the male differently with different girls, the male has a file for each girl under `male/owners/`.
+- The male's clips usually do not change from girl to girl, so one file serves everyone. When a scene moves the male differently with different girls, the male has a file for each girl under `male/characters/`.
 
 ## The layout file
 

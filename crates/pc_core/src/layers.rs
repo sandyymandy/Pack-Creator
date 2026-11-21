@@ -1,9 +1,9 @@
 //! Layered files (pack format 4). Strut reads some files in layers: what is the same for every model of a skeleton is written once, in a file for the skeleton, and what one
 //! character changes is written in a file for her (looked up first). This puts a pack's files in that shape:
 //!
-//! - event bindings: `strut/event_bindings/girls/<girl>.json` (one full table per girl) becomes `skeletons/<skeleton>.json` and `owners/<girl>.json`;
+//! - event bindings: `strut/event_bindings/girls/<girl>.json` (one full table per girl) becomes `skeletons/<skeleton>.json` and `characters/<girl>.json`;
 //! - everyday animations: `strut/animations/entities/girls/base.<girl>.strutanim` becomes the clip set `base`: `strut/animations/base/skeletons/<skeleton>.strutanim` and
-//!   `strut/animations/base/owners/<girl>.strutanim`;
+//!   `strut/animations/base/characters/<girl>.strutanim`;
 //! - scene layouts get each clip's phase, variant and side, so the game need not read them from the clip's name.
 //!
 //! Only what every girl of a skeleton has, in exactly the same form, is moved to the skeleton's file, so nobody gains or loses a binding or a clip.
@@ -28,7 +28,7 @@ fn id_path(id: &str) -> &str {
 
 /// The skeleton id of every girl that has a model in the pack.
 fn girl_skeletons(root: &Path) -> BTreeMap<String, String> {
-    skeleton_ids::plan(root, &BTreeMap::new()).assignments.into_iter().filter(|a| a.kind == skeleton_ids::Kind::Model).map(|a| (a.owner, a.id)).collect()
+    skeleton_ids::plan(root, &BTreeMap::new()).assignments.into_iter().filter(|a| a.kind == skeleton_ids::Kind::Model).map(|a| (a.character, a.id)).collect()
 }
 
 /// The groups of girls that share a skeleton id.
@@ -152,7 +152,7 @@ pub fn plan_bindings(root: &Path) -> Plan {
             let hers: BTreeMap<String, Value> = table.iter().filter(|(k, _)| !shared.contains_key(*k)).map(|(k, v)| (k.clone(), v.clone())).collect();
             let (head, original) = &files[girl];
 
-            plan.writes.insert(format!("{head}/strut/event_bindings/owners/{girl}.json"), (serde_json::to_string_pretty(&file_of(&hers, original)).unwrap_or_default() + "\n").into_bytes());
+            plan.writes.insert(format!("{head}/strut/event_bindings/characters/{girl}.json"), (serde_json::to_string_pretty(&file_of(&hers, original)).unwrap_or_default() + "\n").into_bytes());
             plan.deletes.push(format!("{head}/strut/event_bindings/girls/{girl}.json"));
         }
     }
@@ -218,7 +218,7 @@ pub fn plan_base(root: &Path) -> Plan {
 
             match owned {
                 Ok(owned) => {
-                    plan.writes.insert(format!("{head}/strut/animations/base/owners/{girl}.strutanim"), owned);
+                    plan.writes.insert(format!("{head}/strut/animations/base/characters/{girl}.strutanim"), owned);
                 }
                 Err(e) => plan.notes.push(format!("{rel}: {e}")),
             }

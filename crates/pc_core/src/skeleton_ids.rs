@@ -21,7 +21,7 @@ pub struct Assignment {
     pub rel: String,
     pub kind: Kind,
     /// Who the file belongs to: the girl (`amber`) or the skeleton (`jenny`) its name gives.
-    pub owner: String,
+    pub character: String,
     /// The id it should have.
     pub id: String,
     /// The id it has now.
@@ -70,7 +70,7 @@ fn body_types(root: &Path, files: &[String]) -> BTreeMap<String, String> {
 pub const MALE_ID: &str = "pleasurehorizons:male";
 
 /// Proposes an id for every model and animation file of the pack: a girl's model takes her body type (`jenny` is `pleasurehorizons:jenny`) when her girl file names one, and
-/// her own id otherwise; an animation file takes the id of the girl or the skeleton in its name. `overrides` maps a girl or skeleton (the owner) to an id a person chose.
+/// her own id otherwise; an animation file takes the id of the girl or the skeleton in its name. `overrides` maps a girl or skeleton (the character) to an id a person chose.
 pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
     let files = crate::check::walk(root);
     let bodies = body_types(root, &files);
@@ -108,21 +108,21 @@ pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
         };
 
         models.entry(stem.to_string()).or_insert_with(|| id.clone());
-        result.assignments.push(Assignment { rel: rel.clone(), kind: Kind::Model, owner: stem.to_string(), id, current });
+        result.assignments.push(Assignment { rel: rel.clone(), kind: Kind::Model, character: stem.to_string(), id, current });
     }
 
     /* Animation files: base.<girl>, <scene>-<girl> and <scene>.<skeleton>. What matches nothing is left alone (it is for everyone). */
-    let skeleton_of = |owner: &str| -> Option<String> {
-        if let Some(id) = overrides.get(owner) {
+    let skeleton_of = |character: &str| -> Option<String> {
+        if let Some(id) = overrides.get(character) {
             return Some(id.clone());
         }
 
-        if let Some(id) = models.get(owner) {
+        if let Some(id) = models.get(character) {
             return Some(id.clone());
         }
 
         /* A skeleton named by its body type, `<scene>.jenny`. */
-        let bare = format!("{}:{}", crate::layout::GAME_NAMESPACE, owner);
+        let bare = format!("{}:{}", crate::layout::GAME_NAMESPACE, character);
 
         models.values().any(|id| *id == bare).then_some(bare)
     };
@@ -135,7 +135,7 @@ pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
         }
 
         let name = parts[parts.len() - 1].trim_end_matches(".strutanim");
-        let owner = if let Some(girl) = name.strip_prefix("base.") {
+        let character = if let Some(girl) = name.strip_prefix("base.") {
             Some(girl.to_string())
         } else if parts.len() > 6 && parts[5] == "scenes" {
             /* `<scene>-<girl>` first, then `<scene>.<skeleton>`: the last separator splits them. */
@@ -143,8 +143,8 @@ pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
         } else {
             None
         };
-        let Some(owner) = owner else { continue };
-        let Some(id) = skeleton_of(&owner) else { continue };
+        let Some(character) = character else { continue };
+        let Some(id) = skeleton_of(&character) else { continue };
 
         let current = match std::fs::read(root.join(rel)).map_err(|e| e.to_string()).and_then(|b| strut_anim::skeleton_id(&b)) {
             Ok(id) => id,
@@ -154,7 +154,7 @@ pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
             }
         };
 
-        result.assignments.push(Assignment { rel: rel.clone(), kind: Kind::Animation, owner, id, current });
+        result.assignments.push(Assignment { rel: rel.clone(), kind: Kind::Animation, character, id, current });
     }
 
     let mut groups: BTreeMap<String, Group> = BTreeMap::new();
@@ -163,7 +163,7 @@ pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
         let group = groups.entry(a.id.clone()).or_insert_with(|| Group { id: a.id.clone(), models: Vec::new(), animations: 0 });
 
         match a.kind {
-            Kind::Model => group.models.push(a.owner.clone()),
+            Kind::Model => group.models.push(a.character.clone()),
             Kind::Animation => group.animations += 1,
         }
     }
@@ -268,7 +268,7 @@ mod tests {
         assert!(first.assignments.iter().filter(|a| a.kind == Kind::Model).all(|a| a.rel.contains("/nude/") || a.rel.contains("/dressed/") || a.rel.contains("/male/")));
 
         assert!(first.unreadable.is_empty(), "{:?}", first.unreadable);
-        assert!(first.assignments.iter().any(|a| a.kind == Kind::Model && a.owner == "jenny" && a.id == "pleasurehorizons:jenny"));
+        assert!(first.assignments.iter().any(|a| a.kind == Kind::Model && a.character == "jenny" && a.id == "pleasurehorizons:jenny"));
         assert!(first.assignments.iter().any(|a| a.kind == Kind::Animation && a.rel.ends_with("base.amber.strutanim") && a.id == "pleasurehorizons:jenny"));
         assert!(first.assignments.iter().any(|a| a.kind == Kind::Animation && a.rel.contains("scenes/") && a.rel.ends_with("-2b.strutanim") && a.id == "pleasurehorizons:jenny"));
         assert!(first.assignments.iter().all(|a| a.current.is_none()));

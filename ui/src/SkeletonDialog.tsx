@@ -51,16 +51,16 @@ export function SkeletonDialog({ onClose }: { onClose: () => void }) {
               <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
                 {models.filter(m => m.id === group.id).map(m => (
                   <label key={m.rel} style="display:flex;gap:4px;align-items:center">
-                    {m.owner}
+                    {m.character}
                     <input
                       class="input"
-                      value={choices[m.owner] ?? ''}
+                      value={choices[m.character] ?? ''}
                       placeholder={group.id}
                       style="width:190px"
                       onChange={event => {
                         const value = (event.currentTarget as HTMLInputElement).value.trim();
 
-                        setChoices(value ? { ...choices, [m.owner]: value } : Object.fromEntries(Object.entries(choices).filter(([k]) => k !== m.owner)));
+                        setChoices(value ? { ...choices, [m.character]: value } : Object.fromEntries(Object.entries(choices).filter(([k]) => k !== m.character)));
                       }}
                     />
                   </label>

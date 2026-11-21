@@ -1,5 +1,5 @@
 //! The checks of the one-model-per-participant layout (format 2): a scene's layout file (`strut/scenes/<scene>.strutscene`), its role folders of animation files
-//! (`strut/animations/scenes/<scene>/<role>/skeletons|owners/...`) and the skeleton ids on models and animation files. These look at the pack as a whole, so they run once per
+//! (`strut/animations/scenes/<scene>/<role>/skeletons|characters/...`) and the skeleton ids on models and animation files. These look at the pack as a whole, so they run once per
 //! check of the project.
 
 use super::PackFacts;
@@ -80,7 +80,7 @@ fn id_path(id: &str) -> &str {
 
 struct RoleFile {
     rel: String,
-    /// `skeletons` or `owners`, and the name of the file without its extension.
+    /// `skeletons` or `characters`, and the name of the file without its extension.
     kind: &'static str,
     name: String,
 }
@@ -100,8 +100,8 @@ pub fn check(root: &Path, facts: &PackFacts) -> Vec<Diagnostic> {
 
         if parts.len() == 2 && parts[0] == "scenes" && parts[1].ends_with(".strutscene") {
             layouts.insert(parts[1].trim_end_matches(".strutscene").to_string(), rel.clone());
-        } else if parts.len() == 6 && parts[0] == "animations" && parts[1] == "scenes" && (parts[4] == "skeletons" || parts[4] == "owners") && parts[5].ends_with(".strutanim") {
-            roles.entry(parts[2].to_string()).or_default().entry(parts[3].to_string()).or_default().push(RoleFile { rel: rel.clone(), kind: if parts[4] == "skeletons" { "skeletons" } else { "owners" }, name: parts[5].trim_end_matches(".strutanim").to_string() });
+        } else if parts.len() == 6 && parts[0] == "animations" && parts[1] == "scenes" && (parts[4] == "skeletons" || parts[4] == "characters") && parts[5].ends_with(".strutanim") {
+            roles.entry(parts[2].to_string()).or_default().entry(parts[3].to_string()).or_default().push(RoleFile { rel: rel.clone(), kind: if parts[4] == "skeletons" { "skeletons" } else { "characters" }, name: parts[5].trim_end_matches(".strutanim").to_string() });
         } else if parts.len() == 3 && parts[0] == "animations" && parts[1] == "scenes" && parts[2].ends_with(".strutanim") {
             let name = parts[2].trim_end_matches(".strutanim");
             let scene = name.rsplit_once('-').map(|(s, _)| s).or_else(|| name.rsplit_once('.').map(|(s, _)| s)).unwrap_or(name);
@@ -129,9 +129,9 @@ pub fn check(root: &Path, facts: &PackFacts) -> Vec<Diagnostic> {
         let parts: Vec<&str> = rest.split('/').collect();
         let girl = if let Some(girl) = parts.last().and_then(|n| n.strip_prefix("base.")).and_then(|n| n.strip_suffix(".strutanim")) {
             Some(girl.to_string())
-        } else if parts.len() == 6 && parts[4] == "owners" && parts[3] == "host" && parts[5].ends_with(".strutanim") {
+        } else if parts.len() == 6 && parts[4] == "characters" && parts[3] == "host" && parts[5].ends_with(".strutanim") {
             Some(parts[5].trim_end_matches(".strutanim").to_string())
-        } else if parts.len() == 4 && parts[0] == "animations" && parts[1] == "base" && parts[2] == "owners" && parts[3].ends_with(".strutanim") {
+        } else if parts.len() == 4 && parts[0] == "animations" && parts[1] == "base" && parts[2] == "characters" && parts[3].ends_with(".strutanim") {
             Some(parts[3].trim_end_matches(".strutanim").to_string())
         } else {
             None
@@ -215,11 +215,11 @@ pub fn check(root: &Path, facts: &PackFacts) -> Vec<Diagnostic> {
 
             /* A file for one character may only change clips its skeleton has. */
             if let Some(known) = skeleton_clips.get(role) {
-                for file in files.iter().filter(|f| f.kind == "owners") {
+                for file in files.iter().filter(|f| f.kind == "characters") {
                     let extra: Vec<String> = info_of(root, &file.rel).clips.into_iter().map(|c| c.0).filter(|n| !known.contains(n)).collect();
 
                     if !extra.is_empty() {
-                        found.push(file_level(Severity::Warning, "owner-clip-not-in-skeleton", format!("This file for {} has clips its skeleton's file for the role {role} does not: {}.", file.name, extra.join(", ")), &file.rel));
+                        found.push(file_level(Severity::Warning, "character-clip-not-in-skeleton", format!("This file for {} has clips its skeleton's file for the role {role} does not: {}.", file.name, extra.join(", ")), &file.rel));
                     }
                 }
             }
@@ -286,16 +286,16 @@ pub fn check(root: &Path, facts: &PackFacts) -> Vec<Diagnostic> {
             /* Every skeleton that may fill the role has a file of its own, or girls of it have one each. */
             for id in ids.iter().filter(|i| !i.is_empty()) {
                 let has_skeleton_file = files.iter().any(|f| f.kind == "skeletons" && f.name == id_path(id));
-                let has_owner_file = files.iter().any(|f| f.kind == "owners" && girl_ids.get(&f.name).map_or(false, |g| g == id));
+                let has_character_file = files.iter().any(|f| f.kind == "characters" && girl_ids.get(&f.name).map_or(false, |g| g == id));
 
-                if !has_skeleton_file && !has_owner_file {
+                if !has_skeleton_file && !has_character_file {
                     found.push(file_level(Severity::Warning, "role-without-file-for-skeleton", format!("Nothing in the role {role} of the scene {scene} plays for the skeleton {id}: add {role}/skeletons/{}.strutanim (or a file for a girl who has it).", id_path(id)), layout_rel));
                 }
             }
 
             /* A girl's file is for a girl whose model the role accepts. */
             if role == "host" || !ids.is_empty() {
-                for file in files.iter().filter(|f| f.kind == "owners") {
+                for file in files.iter().filter(|f| f.kind == "characters") {
                     if let Some(id) = girl_ids.get(&file.name) {
                         if !ids.iter().any(|i| i == id) && !skeleton.is_empty() {
                             found.push(file_level(Severity::Warning, "girl-not-in-role", format!("{} has the skeleton {id}, but the role {role} of the scene {scene} is for {}. The game will not let her fill it.", file.name, ids.join(", ")), &file.rel));
@@ -368,7 +368,7 @@ mod tests {
         crate::migrate::update(&copy, true).unwrap();
 
         let after = codes(&copy);
-        let new_codes = ["scene-without-layout", "role-without-files", "role-without-file-for-skeleton", "girl-not-in-role", "old-and-new-scene-files", "animation-without-skeleton-id", "model-without-skeleton-id", "clip-differs-between-roles", "owner-clip-not-in-skeleton", "layout-clip-length", "unused-male-rig", "bad-layout", "scene-without-animation", "stale-fingerprint"];
+        let new_codes = ["scene-without-layout", "role-without-files", "role-without-file-for-skeleton", "girl-not-in-role", "old-and-new-scene-files", "animation-without-skeleton-id", "model-without-skeleton-id", "clip-differs-between-roles", "character-clip-not-in-skeleton", "layout-clip-length", "unused-male-rig", "bad-layout", "scene-without-animation", "stale-fingerprint"];
 
         assert!(new_codes.iter().all(|c| !after.contains(*c)), "a converted pack should be clean of the layout checks: {:?}", new_codes.iter().filter(|c| after.contains(**c)).collect::<Vec<_>>());
 

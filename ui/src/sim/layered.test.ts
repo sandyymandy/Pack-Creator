@@ -7,7 +7,7 @@ const P = 'example:assets/pleasurehorizons/strut/animations/scenes/doggy/';
 
 describe('a scene in the new layout', () => {
   const files = [
-    { path: P + 'host/owners/momo.strutanim', clips: [clip('animation.doggy.slow_L'), clip('animation.doggy.fast_2')] },
+    { path: P + 'host/characters/momo.strutanim', clips: [clip('animation.doggy.slow_L'), clip('animation.doggy.fast_2')] },
     { path: P + 'host/skeletons/jenny.strutanim', clips: [clip('animation.doggy.intro'), clip('animation.doggy.slow_R'), clip('animation.doggy.fast'), clip('animation.doggy.fast_2')] }
   ];
 

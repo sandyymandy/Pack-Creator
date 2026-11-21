@@ -291,9 +291,9 @@ fn girl_files(girl_file: &str, id: &str, facts: &PackFacts) -> Vec<Diagnostic> {
         (format!("{base}/{}", crate::paths::girl_base(id)), "her animations"),
     ];
     let old_base = format!("{base}/{}", crate::paths::girl_base_old(id));
-    let owner_base = format!("{base}/strut/animations/base/owners/{id}.strutanim");
+    let character_base = format!("{base}/strut/animations/base/characters/{id}.strutanim");
     let skeleton_base = facts.files.iter().any(|f| f.starts_with(&format!("{base}/strut/animations/base/skeletons/")));
-    let mut missing: Vec<&str> = wanted.iter().filter(|(path, _)| !facts.files.contains(path) && !facts.files.contains(&old_base) && !facts.files.contains(&owner_base) && !skeleton_base).map(|(_, what)| *what).collect();
+    let mut missing: Vec<&str> = wanted.iter().filter(|(path, _)| !facts.files.contains(path) && !facts.files.contains(&old_base) && !facts.files.contains(&character_base) && !skeleton_base).map(|(_, what)| *what).collect();
 
     if !has_model {
         missing.insert(0, "her model (nude, or dressed, or both)");

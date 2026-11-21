@@ -2,7 +2,8 @@
 //! look like raises it by one, and a pack is updated by running the steps from its number up, in place, with the changes kept so they can be undone.
 //!
 //! - 1: a girl's model carries the male as a second rig (`steve`) and each scene's animation moves both.
-//! - 4: layered files: event bindings and everyday animations by skeleton and owner, and the phase, variant and side of each clip in the scene layouts (see `layers`).
+//! - 5: the folder of one character's own files is called `characters`, not `owners` (`animations/<set>/characters/`, `event_bindings/characters/`).
+//! - 4: layered files: event bindings and everyday animations by skeleton and character, and the phase, variant and side of each clip in the scene layouts (see `layers`).
 //! - 3: the files are grouped under `entities`, `blocks` and `items` (girls' models, base animations and physics files move; see `paths`).
 //! - 2: one model per participant: the male is the base mod's own model, every scene is a role folder with a layout, models and animation files carry skeleton ids.
 //!
@@ -16,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 /// The format this version of the tool writes.
-pub const CURRENT: u32 = 4;
+pub const CURRENT: u32 = 5;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Step {
@@ -25,10 +26,14 @@ pub struct Step {
     pub detail: &'static str,
 }
 
-const STEPS: [Step; 3] = [Step {
+const STEPS: [Step; 4] = [Step {
+    to: 5,
+    title: "Characters, not owners",
+    detail: "Renames the folders of one character's own files: owners becomes characters (strut/animations/<set>/characters, strut/event_bindings/characters).",
+}, Step {
     to: 4,
     title: "Layered files",
-    detail: "Event bindings and everyday animations are written once for a skeleton and again only for what one girl changes (strut/event_bindings/skeletons and owners, strut/animations/base/skeletons and owners), and every clip in a scene layout gets its phase, variant and side.",
+    detail: "Event bindings and everyday animations are written once for a skeleton and again only for what one girl changes (strut/event_bindings/skeletons and characters, strut/animations/base/skeletons and characters), and every clip in a scene layout gets its phase, variant and side.",
 }, Step {
     to: 3,
     title: "Files grouped under entities, blocks and items",
@@ -192,9 +197,11 @@ fn move_files(root: &Path) -> Result<(usize, Vec<String>)> {
 pub fn status(root: &Path, meta: &ProjectMeta) -> Status {
     let rig = has_old_male(root);
     let renames = !legacy_files(root).is_empty();
-    let moves = !files_to_move(root).is_empty();
+    let to_move = files_to_move(root);
+    let moves = to_move.iter().any(|(from, _)| !from.contains("/owners/"));
+    let owners = to_move.iter().any(|(from, _)| from.contains("/owners/"));
     let layers = needs_layers(root);
-    let old_rig = rig || renames || moves || layers;
+    let old_rig = rig || renames || moves || layers || owners;
     let needed = meta.format < CURRENT || old_rig;
 
     Status {
@@ -203,7 +210,7 @@ pub fn status(root: &Path, meta: &ProjectMeta) -> Status {
         needed,
         reason: (old_rig && meta.format >= CURRENT).then(|| "Some files are still in the form of an older format.".to_string()),
         /* Only the steps that have something to do in this pack are listed. */
-        steps: STEPS.iter().filter(|s| match s.to { 4 => layers, 3 => moves, _ => rig || renames }).cloned().collect(),
+        steps: STEPS.iter().filter(|s| match s.to { 5 => owners, 4 => layers, 3 => moves, _ => rig || renames }).cloned().collect(),
         newer: meta.format > CURRENT,
     }
 }
@@ -235,9 +242,9 @@ fn restamp(root: &Path) -> Result<usize> {
         let parts: Vec<&str> = rest.split('/').collect();
         let girl = if let Some(g) = parts.last().and_then(|n| n.strip_prefix("base.")).and_then(|n| n.strip_suffix(".strutanim")) {
             g.to_string()
-        } else if parts.len() == 6 && parts[0] == "animations" && parts[3] == "host" && parts[4] == "owners" && parts[5].ends_with(".strutanim") {
+        } else if parts.len() == 6 && parts[0] == "animations" && parts[3] == "host" && parts[4] == "characters" && parts[5].ends_with(".strutanim") {
             parts[5].trim_end_matches(".strutanim").to_string()
-        } else if parts.len() == 4 && parts[0] == "animations" && parts[1] == "base" && parts[2] == "owners" && parts[3].ends_with(".strutanim") {
+        } else if parts.len() == 4 && parts[0] == "animations" && parts[1] == "base" && parts[2] == "characters" && parts[3].ends_with(".strutanim") {
             parts[3].trim_end_matches(".strutanim").to_string()
         } else {
             continue;
@@ -380,7 +387,7 @@ mod tests {
         copy_dir(&source, &copy);
         update(&copy, true).unwrap();
 
-        let ids: BTreeMap<String, String> = skeleton_ids::plan(&copy, &BTreeMap::new()).assignments.into_iter().filter(|a| a.kind == skeleton_ids::Kind::Model).map(|a| (a.owner, a.id)).collect();
+        let ids: BTreeMap<String, String> = skeleton_ids::plan(&copy, &BTreeMap::new()).assignments.into_iter().filter(|a| a.kind == skeleton_ids::Kind::Model).map(|a| (a.character, a.id)).collect();
         let sync = "data/pleasurehorizons/asset_sync/strut";
         let path_of = |id: &str| id.split_once(':').map_or(id.to_string(), |(_, p)| p.to_string());
         let (mut tables, mut base_files) = (0, 0);
@@ -393,7 +400,7 @@ mod tests {
                 let had: serde_json::Value = serde_json::from_str(&text).unwrap();
                 let mut merged = serde_json::Map::new();
 
-                for file in [format!("{sync}/event_bindings/skeletons/{}.json", path_of(&ids[girl])), format!("{sync}/event_bindings/owners/{girl}.json")] {
+                for file in [format!("{sync}/event_bindings/skeletons/{}.json", path_of(&ids[girl])), format!("{sync}/event_bindings/characters/{girl}.json")] {
                     if let Some(layer) = std::fs::read_to_string(copy.join(file)).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()) {
                         merged.extend(layer["bindings"].as_object().cloned().unwrap_or_default());
                     }
@@ -421,7 +428,7 @@ mod tests {
 
                 let mut got: Vec<crate::strut_anim::Clip> = Vec::new();
 
-                for file in [format!("{sync}/animations/base/owners/{girl}.strutanim"), format!("{sync}/animations/base/skeletons/{}.strutanim", path_of(&ids[girl]))] {
+                for file in [format!("{sync}/animations/base/characters/{girl}.strutanim"), format!("{sync}/animations/base/skeletons/{}.strutanim", path_of(&ids[girl]))] {
                     if let Some(clips) = std::fs::read(copy.join(file)).ok().and_then(|b| crate::strut_anim::read(&b).ok()) {
                         for clip in clips {
                             if !got.iter().any(|c| c.name == clip.name) {

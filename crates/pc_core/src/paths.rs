@@ -60,6 +60,17 @@ pub fn moved(rel: &str) -> Option<String> {
     let at = rel.find("/asset_sync/strut/")? + "/asset_sync/strut/".len();
     let (head, tail) = rel.split_at(at);
     let parts: Vec<&str> = tail.split('/').collect();
+
+    /* Format 5: the folder of a character's own files was called `owners`. */
+    if matches!(parts[0], "animations" | "event_bindings") {
+        if let Some(at) = parts.iter().position(|p| *p == "owners").filter(|at| *at >= 1 && *at + 1 < parts.len()) {
+            let mut renamed = parts.clone();
+
+            renamed[at] = "characters";
+            return Some(format!("{head}{}", renamed.join("/")));
+        }
+    }
+
     let new_tail = match parts.as_slice() {
         ["models", "nude" | "dressed", file] if *file == "player.strutmodel" && parts[1] == "nude" => format!("models/entities/male/nude/{file}"),
         ["models", "nude" | "dressed", file] if *file == "player.strutmodel" => return None,
@@ -96,8 +107,12 @@ mod tests {
         assert_eq!(at("animations/base.lucy.strutanim").as_deref(), Some("animations/entities/girls/base.lucy.strutanim"));
         assert_eq!(at("animations/block/x.strutanim").as_deref(), Some("animations/blocks/x.strutanim"));
         assert_eq!(at("physics/models/nude/lucy.json").as_deref(), Some("physics/models/entities/girls/nude/lucy.json"));
+        assert_eq!(at("animations/scenes/doggy/host/owners/lucy.strutanim").as_deref(), Some("animations/scenes/doggy/host/characters/lucy.strutanim"));
+        assert_eq!(at("animations/base/owners/lucy.strutanim").as_deref(), Some("animations/base/characters/lucy.strutanim"));
+        assert_eq!(at("event_bindings/owners/lucy.json").as_deref(), Some("event_bindings/characters/lucy.json"));
+        assert_eq!(at("animations/base/skeletons/jenny.strutanim"), None);
         assert_eq!(at("models/armour/lucy/chest.strutmodel"), None);
-        assert_eq!(at("animations/scenes/doggy/host/owners/lucy.strutanim"), None);
+        assert_eq!(at("animations/scenes/doggy/host/characters/lucy.strutanim"), None);
         assert_eq!(at("models/entities/girls/nude/lucy.strutmodel"), None);
     }
 }

@@ -15,9 +15,9 @@ use std::path::Path;
 pub struct AnimFile {
     pub rel: String,
     /// `girl`, `skeleton` or `shared`.
-    pub owner_kind: String,
+    pub character_kind: String,
     /// The girl's id, the body type, or empty for the shared file.
-    pub owner: String,
+    pub character: String,
 }
 
 /// A scene, who its file says it is for, and its animation files.
@@ -47,7 +47,7 @@ fn anim_name_of(rel: &str) -> Option<(String, String)> {
     (!name.contains('/')).then(|| (format!("data/{namespace}/asset_sync/strut/animations/scenes/"), name.to_string()))
 }
 
-/// Splits `cowgirl-momo`, `cowgirl.bia` or `cowgirl` into the scene and the owner (kind and name), as the game does: a dot before any dash is a skeleton.
+/// Splits `cowgirl-momo`, `cowgirl.bia` or `cowgirl` into the scene and the character (kind and name), as the game does: a dot before any dash is a skeleton.
 fn split(name: &str) -> (String, String, String) {
     let dot = name.find('.');
     let dash = name.find('-');
@@ -77,10 +77,10 @@ pub fn scopes(root: &Path) -> Vec<SceneScope> {
 
     for rel in &files {
         let Some((_, name)) = anim_name_of(rel) else { continue };
-        let (scene, kind, owner) = split(&name);
+        let (scene, kind, character) = split(&name);
 
         if let Some(found) = scenes.iter_mut().find(|s| s.id == scene) {
-            found.files.push(AnimFile { rel: rel.clone(), owner_kind: kind, owner });
+            found.files.push(AnimFile { rel: rel.clone(), character_kind: kind, character });
         }
     }
 
@@ -134,7 +134,7 @@ fn find(root: &Path, scene: &str) -> Result<SceneScope> {
 pub fn make_skeleton_wide(root: &Path, scene_id: &str, girl: &str) -> Result<Vec<String>> {
     let scene = find(root, scene_id)?;
     let body = body_of(root, girl).ok_or_else(|| Error::invalid(format!("{girl} has no girl file with a body type in this pack, so her skeleton is not known.")))?;
-    let source = scene.files.iter().find(|f| f.owner_kind == "girl" && f.owner == girl).ok_or_else(|| Error::invalid(format!("The scene {scene_id} has no animation file of {girl}'s ({scene_id}-{girl}.strutanim).")))?;
+    let source = scene.files.iter().find(|f| f.character_kind == "girl" && f.character == girl).ok_or_else(|| Error::invalid(format!("The scene {scene_id} has no animation file of {girl}'s ({scene_id}-{girl}.strutanim).")))?;
     let (folder, _) = anim_name_of(&source.rel).ok_or_else(|| Error::invalid("not a scene animation file"))?;
     let target = format!("{folder}{scene_id}.{body}.strutanim");
 
@@ -181,8 +181,8 @@ pub fn make_girl_specific(root: &Path, scene_id: &str, girl: &str, keep_original
     let source = scene
         .files
         .iter()
-        .find(|f| f.owner_kind == "skeleton" && f.owner == body)
-        .or_else(|| scene.files.iter().find(|f| f.owner_kind == "shared"))
+        .find(|f| f.character_kind == "skeleton" && f.character == body)
+        .or_else(|| scene.files.iter().find(|f| f.character_kind == "shared"))
         .ok_or_else(|| Error::invalid(format!("The scene {scene_id} has no animation file for the {body} skeleton or for everyone, so there is nothing to give {girl}.")))?;
     let (folder, _) = anim_name_of(&source.rel).ok_or_else(|| Error::invalid("not a scene animation file"))?;
     let target = format!("{folder}{scene_id}-{girl}.strutanim");
@@ -245,7 +245,7 @@ mod tests {
         let before = scopes(root);
 
         assert_eq!(before[0].supported_girls, vec!["amy"]);
-        assert_eq!(before[0].files[0].owner_kind, "girl");
+        assert_eq!(before[0].files[0].character_kind, "girl");
 
         make_skeleton_wide(root, "hug", "amy").unwrap();
 
@@ -254,7 +254,7 @@ mod tests {
         assert!(wide[0].supported_girls.is_empty());
         assert_eq!(wide[0].body_types, vec!["jenny"]);
         assert_eq!(wide[0].files.len(), 1);
-        assert_eq!((wide[0].files[0].owner_kind.as_str(), wide[0].files[0].owner.as_str()), ("skeleton", "jenny"));
+        assert_eq!((wide[0].files[0].character_kind.as_str(), wide[0].files[0].character.as_str()), ("skeleton", "jenny"));
         assert!(wide[0].files[0].rel.ends_with("hug.jenny.strutanim"));
 
         let json: Value = serde_json::from_str(&std::fs::read_to_string(root.join("data/pleasurehorizons/scenes/hug.json")).unwrap()).unwrap();
@@ -266,7 +266,7 @@ mod tests {
         let again = scopes(root);
 
         assert_eq!(again[0].supported_girls, vec!["amy"]);
-        assert_eq!((again[0].files[0].owner_kind.as_str(), again[0].files[0].owner.as_str()), ("girl", "amy"));
+        assert_eq!((again[0].files[0].character_kind.as_str(), again[0].files[0].character.as_str()), ("girl", "amy"));
         assert_eq!(std::fs::read_to_string(root.join(&again[0].files[0].rel)).unwrap(), "AMY");
     }
 

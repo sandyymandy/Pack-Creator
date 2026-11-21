@@ -57,7 +57,7 @@ export class SceneCatalogue {
   private readonly sides = new Map<string, Role>();
 
   /**
-   * A scene in the old layout is single files (`<scene>-<girl>`, `<scene>`). A scene in the new layout is a folder per role: the host's clips are in `<scene>/host/owners/<girl>`
+   * A scene in the old layout is single files (`<scene>-<girl>`, `<scene>`). A scene in the new layout is a folder per role: the host's clips are in `<scene>/host/characters/<girl>`
    * (what she changes) and `<scene>/host/skeletons/<skeleton>` (what everyone on her skeleton plays), and each clip is looked up in her file first and in her skeleton's second.
    */
   constructor(files: AnimationFile[], readonly sceneId: string, readonly girlId: string, readonly replaceDefault: boolean) {
@@ -91,7 +91,7 @@ export class SceneCatalogue {
 
       if (file.path.includes(`/animations/scenes/${sceneId}/host/`)) {
         layered = true;
-        collect(file.path.includes('/host/owners/') ? name : BASE, file);
+        collect(file.path.includes('/host/characters/') || file.path.includes('/host/owners/') ? name : BASE, file);
         continue;
       }
 

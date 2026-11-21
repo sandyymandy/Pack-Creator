@@ -65,7 +65,7 @@ fn strip_male(bytes: &[u8], model: &Model, skeleton_id: &str) -> std::result::Re
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Owner {
+enum Character {
     Girl,
     Body,
     Shared,
@@ -95,7 +95,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
     let mut report = Report { applied: apply, ..Default::default() };
     let files = crate::check::walk(root);
     let ids = skeleton_ids::plan(root, &BTreeMap::new());
-    let id_of = |owner: &str| ids.assignments.iter().find(|a| a.kind == skeleton_ids::Kind::Model && a.owner == owner).map(|a| a.id.clone());
+    let id_of = |character: &str| ids.assignments.iter().find(|a| a.kind == skeleton_ids::Kind::Model && a.character == character).map(|a| a.id.clone());
 
     /* The girls' models that carry the male. */
     let mut models: Vec<GirlModel> = Vec::new();
@@ -151,16 +151,16 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
         }
 
         /* Who it is for: base.<girl>, base, <scene>-<girl>, <scene>.<skeleton>, or <scene> (everyone). */
-        let (scene, owner, kind) = if name == "base" {
-            (None, String::new(), Owner::Shared)
+        let (scene, character, kind) = if name == "base" {
+            (None, String::new(), Character::Shared)
         } else if let Some(girl) = name.strip_prefix("base.") {
-            (None, girl.to_string(), Owner::Girl)
+            (None, girl.to_string(), Character::Girl)
         } else if in_scenes {
             match name.rsplit_once('-').filter(|(_, g)| models.iter().any(|m| m.stem == *g)) {
-                Some((scene, girl)) => (Some(scene.to_string()), girl.to_string(), Owner::Girl),
+                Some((scene, girl)) => (Some(scene.to_string()), girl.to_string(), Character::Girl),
                 None => match name.rsplit_once('.') {
-                    Some((scene, body)) => (Some(scene.to_string()), body.to_string(), Owner::Body),
-                    None => (Some(name.clone()), String::new(), Owner::Shared),
+                    Some((scene, body)) => (Some(scene.to_string()), body.to_string(), Character::Body),
+                    None => (Some(name.clone()), String::new(), Character::Shared),
                 },
             }
         } else {
@@ -169,9 +169,9 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
 
         /* The skeletons it is written for: her own, the one it names, or (a file for everyone) the ones the scene is for. */
         let targets: Vec<(String, String)> = match kind {
-            Owner::Girl => vec![(owner.clone(), owner.clone())],
-            Owner::Body => vec![(owner.clone(), format!("{}:{}", crate::layout::GAME_NAMESPACE, owner))],
-            Owner::Shared => {
+            Character::Girl => vec![(character.clone(), character.clone())],
+            Character::Body => vec![(character.clone(), format!("{}:{}", crate::layout::GAME_NAMESPACE, character))],
+            Character::Shared => {
                 let listed = scene.as_deref().map(|s| scene_bodies(root, s)).unwrap_or_default();
                 let mut all: Vec<String> = if listed.is_empty() { models.iter().filter_map(|m| id_of(&m.stem)).map(|id| id_path(&id).to_string()).collect() } else { listed };
 
@@ -193,7 +193,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
             /* The model that was animated with it: hers, one of the skeleton named, or (when the skeleton has no girl in this pack) any with the male rig, which is all that the
                male's side and the proof need of it. */
             let stem = match kind {
-                Owner::Girl => owner.clone(),
+                Character::Girl => character.clone(),
                 _ => models.iter().find(|m| id_of(&m.stem).as_deref() == Some(wanted.as_str())).or_else(|| models.first()).map(|m| m.stem.clone()).unwrap_or_default(),
             };
             let Some(model) = models.iter().find(|m| m.stem == stem && m.rel.contains("/nude/")).or_else(|| models.iter().find(|m| m.stem == stem)) else {
@@ -205,7 +205,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
                 break;
             };
             let host_id = match kind {
-                Owner::Girl => id_of(&stem),
+                Character::Girl => id_of(&stem),
                 _ => Some(wanted.clone()),
             };
             let Some(host_id) = host_id else {
@@ -262,9 +262,9 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
             }
             Some(scene) => {
                 for (target, host, male) in produced {
-                    let by_girl = kind == Owner::Girl;
+                    let by_girl = kind == Character::Girl;
                     let host_id = if by_girl { id_of(&target).unwrap_or_default() } else { format!("{}:{}", crate::layout::GAME_NAMESPACE, target) };
-                    let host_rel = if by_girl { format!("{base}/animations/scenes/{scene}/host/owners/{target}.strutanim") } else { format!("{base}/animations/scenes/{scene}/host/skeletons/{}.strutanim", id_path(&host_id)) };
+                    let host_rel = if by_girl { format!("{base}/animations/scenes/{scene}/host/characters/{target}.strutanim") } else { format!("{base}/animations/scenes/{scene}/host/skeletons/{}.strutanim", id_path(&host_id)) };
                     let entry = scenes.entry(scene.clone()).or_default();
 
                     entry.hosts.insert(host_id);
@@ -290,20 +290,20 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
 
         let mut differing = 0;
 
-        for (owner, by_girl, id, bytes, _) in &parts.males {
+        for (character, by_girl, id, bytes, _) in &parts.males {
             if clips_equal(&strut_anim::read(bytes).unwrap_or_default(), &reference) {
                 continue;
             }
 
-            let folder = if *by_girl { "owners" } else { "skeletons" };
-            let file = if *by_girl { owner.clone() } else { id_path(id).to_string() };
+            let folder = if *by_girl { "characters" } else { "skeletons" };
+            let file = if *by_girl { character.clone() } else { id_path(id).to_string() };
 
             writes.insert(format!("{base}/animations/scenes/{scene}/male/{folder}/{file}.strutanim"), bytes.clone());
             differing += 1;
         }
 
         if differing > 0 {
-            report.findings.push(format!("The scene {scene} has male motion that differs from girl to girl, so {differing} girls' male clips are written for them alone (male/owners)."));
+            report.findings.push(format!("The scene {scene} has male motion that differs from girl to girl, so {differing} girls' male clips are written for them alone (male/characters)."));
         }
 
         let layout_rel = format!("{base}/scenes/{scene}.strutscene");
@@ -549,7 +549,7 @@ mod tests {
         assert!(after.keys().any(|k| k.contains("/male/") && k.ends_with(".strutanim")));
         assert!(!after.keys().any(|k| k.contains("models/male/")), "the pack writes a male model, but the base mod has it");
         assert!(after.keys().any(|k| k.contains("/scenes/") && k.ends_with(".strutscene")));
-        assert!(after.keys().any(|k| k.contains("/host/owners/")));
+        assert!(after.keys().any(|k| k.contains("/host/characters/")));
         assert!(!after.keys().any(|k| k.contains("animations/scenes/") && !k.contains("/host/") && !k.contains("/male/")), "an old scene file is left");
 
         if done.skipped.is_empty() {
