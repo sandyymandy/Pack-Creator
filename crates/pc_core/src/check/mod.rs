@@ -281,15 +281,17 @@ fn scene_animation(scene_file: &str, id: &str, facts: &PackFacts) -> Vec<Diagnos
 /// a placeholder); missing some is a mistake.
 fn girl_files(girl_file: &str, id: &str, facts: &PackFacts) -> Vec<Diagnostic> {
     let base = format!("data/{GAME_NAMESPACE}/{ASSET_SYNC}");
-    let nude = format!("{base}/strut/models/nude/{id}.strutmodel");
-    let dressed = format!("{base}/strut/models/dressed/{id}.strutmodel");
+    let nude = format!("{base}/{}", crate::paths::girl_model("nude", id));
+    let dressed = format!("{base}/{}", crate::paths::girl_model("dressed", id));
+    let (old_nude, old_dressed) = (format!("{base}/{}", crate::paths::girl_model_old("nude", id)), format!("{base}/{}", crate::paths::girl_model_old("dressed", id)));
     /* One model is enough: a girl with only a nude (or only a dressed) model is always drawn from the one she has. */
-    let has_model = facts.files.contains(&nude) || facts.files.contains(&dressed);
+    let has_model = [&nude, &dressed, &old_nude, &old_dressed].iter().any(|p| facts.files.contains(*p));
     let wanted = [
         (format!("{base}/textures/entities/{id}.png"), "her texture"),
-        (format!("{base}/strut/animations/base.{id}.strutanim"), "her animations"),
+        (format!("{base}/{}", crate::paths::girl_base(id)), "her animations"),
     ];
-    let mut missing: Vec<&str> = wanted.iter().filter(|(path, _)| !facts.files.contains(path)).map(|(_, what)| *what).collect();
+    let old_base = format!("{base}/{}", crate::paths::girl_base_old(id));
+    let mut missing: Vec<&str> = wanted.iter().filter(|(path, _)| !facts.files.contains(path) && !facts.files.contains(&old_base)).map(|(_, what)| *what).collect();
 
     if !has_model {
         missing.insert(0, "her model (nude, or dressed, or both)");

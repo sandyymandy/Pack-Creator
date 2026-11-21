@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn a_good_file_has_no_problems() {
         assert!(check("data/pleasurehorizons/asset_sync/textures/entities/amber.png", 1000, &png(64, 64)).is_empty());
-        assert!(check("data/pleasurehorizons/asset_sync/strut/models/nude/amber.strutmodel", 1000, &[]).is_empty());
+        assert!(check("data/pleasurehorizons/asset_sync/strut/models/entities/girls/nude/amber.strutmodel", 1000, &[]).is_empty());
     }
 
     #[test]

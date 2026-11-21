@@ -100,7 +100,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
     for rel in &files {
         let parts: Vec<&str> = rel.split('/').collect();
 
-        if parts.len() < 7 || parts[0] != "data" || parts[2] != ASSET_SYNC || parts[3] != "strut" || parts[4] != "models" || parts[5] == "male" || !rel.ends_with(".strutmodel") {
+        if parts.len() < 7 || parts[0] != "data" || parts[2] != ASSET_SYNC || parts[3] != "strut" || parts[4] != "models" || !crate::paths::is_girl_model(&parts[4..].join("/")) {
             continue;
         }
 
@@ -519,7 +519,7 @@ mod tests {
 
         if done.skipped.is_empty() {
             for (rel, bytes) in &after {
-                if rel.contains("/models/nude/") && rel.ends_with(".strutmodel") {
+                if crate::paths::is_girl_model(rel.split_once("/strut/").map_or("", |x| x.1)) && rel.contains("/nude/") {
                     let model = strut_model::read(bytes).unwrap();
 
                     assert!(!model.group_bones.iter().any(|b| b.name == MALE_ROOT), "{rel} still has the male");
@@ -595,6 +595,7 @@ mod tests {
             if before.get(rel) != Some(bytes) {
                 if let Some(target) = ours(rel) {
                     wrote += 1;
+                    println!("changes {rel}");
 
                     if std::env::var("PH_WRITE").is_ok() {
                         std::fs::create_dir_all(target.parent().unwrap()).unwrap();

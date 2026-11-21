@@ -2,6 +2,7 @@
 //! look like raises it by one, and a pack is updated by running the steps from its number up, in place, with the changes kept so they can be undone.
 //!
 //! - 1: a girl's model carries the male as a second rig (`steve`) and each scene's animation moves both.
+//! - 3: the files are grouped under `entities`, `blocks` and `items` (girls' models, base animations and physics files move; see `paths`).
 //! - 2: one model per participant: the male is the base mod's own model, every scene is a role folder with a layout, models and animation files carry skeleton ids.
 //!
 //! A pack's number is not trusted alone: a pack made before the number existed, or one with old files copied in, is judged by what is in it too.
@@ -14,7 +15,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 /// The format this version of the tool writes.
-pub const CURRENT: u32 = 2;
+pub const CURRENT: u32 = 3;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Step {
@@ -23,7 +24,11 @@ pub struct Step {
     pub detail: &'static str,
 }
 
-const STEPS: [Step; 1] = [Step {
+const STEPS: [Step; 2] = [Step {
+    to: 3,
+    title: "Files grouped under entities, blocks and items",
+    detail: "Moves the girls' models, base animations and physics files to the folders the game reads (strut/models/entities/girls/..., strut/animations/entities/...), and blocks and items to their own plural folders.",
+}, Step {
     to: 2,
     title: "One model per participant",
     detail: "Takes the old male rig out of the girls' models, splits every scene's animation between the girl and the base mod's male, writes a layout for each scene and gives models and animation files their skeleton ids.",
@@ -128,8 +133,50 @@ fn rename_legacy(root: &Path) -> Result<usize> {
     Ok(count)
 }
 
+/// The files that are still where format 2 kept them.
+fn files_to_move(root: &Path) -> Vec<(String, String)> {
+    crate::check::walk(root).into_iter().filter_map(|rel| crate::paths::moved(&rel).map(|new| (rel, new))).collect()
+}
+
+/// Moves the files to where format 3 keeps them. A file whose new place is taken is left, and reported.
+fn move_files(root: &Path) -> Result<(usize, Vec<String>)> {
+    let mut moved = 0;
+    let mut left = Vec::new();
+
+    for (from, to) in files_to_move(root) {
+        let target = root.join(&to);
+
+        if target.exists() {
+            left.push(format!("{from}: {to} is already there"));
+            continue;
+        }
+
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| crate::Error::io(parent, e))?;
+        }
+
+        std::fs::rename(root.join(&from), &target).map_err(|e| crate::Error::io(&target, e))?;
+        moved += 1;
+    }
+
+    /* The folders they left are empty now. */
+    fn prune(dir: &Path) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    prune(&entry.path());
+                    let _ = std::fs::remove_dir(entry.path());
+                }
+            }
+        }
+    }
+
+    prune(&root.join("data"));
+    Ok((moved, left))
+}
+
 pub fn status(root: &Path, meta: &ProjectMeta) -> Status {
-    let old_rig = has_old_male(root) || !legacy_files(root).is_empty();
+    let old_rig = has_old_male(root) || !legacy_files(root).is_empty() || !files_to_move(root).is_empty();
     let needed = meta.format < CURRENT || old_rig;
 
     Status {
@@ -151,7 +198,15 @@ pub fn update(root: &Path, apply: bool) -> Result<Report> {
         rename_legacy(root)?;
     }
 
+    let (moved, left) = if apply { move_files(root)? } else { (files_to_move(root).len(), Vec::new()) };
     let mut report = pack_split::split_pack(root, apply)?;
+
+    if moved > 0 {
+        report.findings.push(format!("{moved} files {} to the folders the game reads now.", if apply { "were moved" } else { "would be moved" }));
+        report.files_written += moved;
+    }
+
+    report.skipped.extend(left);
 
     if apply {
         let plan = skeleton_ids::plan(root, &BTreeMap::new());

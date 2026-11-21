@@ -104,8 +104,8 @@ pub fn check(root: &Path, facts: &PackFacts) -> Vec<Diagnostic> {
 
             old_files.entry(scene.to_string()).or_default().push(rel.clone());
             old_files.entry(name.to_string()).or_default().push(rel.clone());
-        } else if parts.len() == 3 && parts[0] == "models" && (parts[1] == "nude" || parts[1] == "dressed") && parts[2].ends_with(".strutmodel") {
-            models.push((rel.clone(), parts[2].trim_end_matches(".strutmodel").to_string()));
+        } else if crate::paths::is_girl_model(rest) {
+            models.push((rel.clone(), parts[parts.len() - 1].trim_end_matches(".strutmodel").to_string()));
         }
     }
 

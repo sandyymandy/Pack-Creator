@@ -21,9 +21,9 @@ function seed(): void {
   files.set('data/pleasurehorizons/girl_traits/shy_fox.json', '{\n  "category": "temperament",\n  "description": "She hides.",\n  "goals": []\n}\n');
   files.set('data/pleasurehorizons/scenes/hug.json', '{\n  "type": "on_player"\n}\n');
   files.set('data/pleasurehorizons/asset_sync/textures/entities/amber.png', 'png');
-  files.set('data/pleasurehorizons/asset_sync/strut/models/nude/amber.strutmodel', 'STMD');
-  files.set('data/pleasurehorizons/asset_sync/strut/animations/base.amber.strutanim', 'STAM');
-  files.set('data/pleasurehorizons/asset_sync/strut/physics/models/nude/amber.json', '{\n  "version": 1,\n  "bones": {\n    "head": { "preset": "jiggle-soft", "frequency": 1.6, "damping": 0.18, "length": 0.3, "limit": { "x": [-40, 40], "z": [-40, 40] } },\n    "body": { "preset": "jiggle-firm", "length": 0.5 },\n    "tail": { "preset": "tail" }\n  },\n  "chains": { "hair": { "bones": ["h1"] } }\n}\n');
+  files.set('data/pleasurehorizons/asset_sync/strut/models/entities/girls/nude/amber.strutmodel', 'STMD');
+  files.set('data/pleasurehorizons/asset_sync/strut/animations/entities/girls/base.amber.strutanim', 'STAM');
+  files.set('data/pleasurehorizons/asset_sync/strut/physics/models/entities/girls/nude/amber.json', '{\n  "version": 1,\n  "bones": {\n    "head": { "preset": "jiggle-soft", "frequency": 1.6, "damping": 0.18, "length": 0.3, "limit": { "x": [-40, 40], "z": [-40, 40] } },\n    "body": { "preset": "jiggle-firm", "length": 0.5 },\n    "tail": { "preset": "tail" }\n  },\n  "chains": { "hair": { "bones": ["h1"] } }\n}\n');
 }
 
 seed();
@@ -190,13 +190,13 @@ export async function mock(command: string, args: Args = {}): Promise<unknown> {
     case 'guess_body_type': return delay('jenny');
     case 'detect_scenes': return delay([{ name: 'Doggy', scene_type: 'on_player', parts: { slow: ['doggy_slow'], fast: ['doggy_fast'] } }]);
     case 'old_pack_girls': return delay({ girls: ['zoe', 'amy'], namespace: 'oldns', rewritten: false });
-    case 'convert_file': return delay({ girl: '', written: ['data/pleasurehorizons/asset_sync/strut/models/nude/zoe.strutmodel'], notes: [{ level: 'kept', message: 'The model: 12 bones, 30 cubes.' }] });
+    case 'convert_file': return delay({ girl: '', written: ['data/pleasurehorizons/asset_sync/strut/models/entities/girls/nude/zoe.strutmodel'], notes: [{ level: 'kept', message: 'The model: 12 bones, 30 cubes.' }] });
     case 'import_old_pack': {
       files.set('data/pleasurehorizons/girls/zoe.json', '{\n  "id": "zoe",\n  "type": "settler",\n  "components": {}\n}\n');
       return delay({ girl: 'data/pleasurehorizons/girls/zoe.json', written: [], notes: [{ level: 'kept', message: 'The nude model: 40 bones, 120 cubes.' }, { level: 'kept', message: 'Her animations: 12 base animation(s) and 3 scene file(s).' }, { level: 'error', message: 'The scene "Hug" uses the animation "x", but her animation file has no such animation.' }] });
     }
-    case 'viewer_files': return delay({ id: 'amber', models: ['data/pleasurehorizons/asset_sync/strut/models/nude/amber.strutmodel'], texture: null, animations: ['data/pleasurehorizons/asset_sync/strut/animations/base.amber.strutanim'] });
-    case 'add_basic_physics': return delay({ path: 'data/pleasurehorizons/asset_sync/strut/physics/models/nude/amber.json', added: ['boobL', 'boobR', 'assL', 'assR'] });
+    case 'viewer_files': return delay({ id: 'amber', models: ['data/pleasurehorizons/asset_sync/strut/models/entities/girls/nude/amber.strutmodel'], texture: null, animations: ['data/pleasurehorizons/asset_sync/strut/animations/entities/girls/base.amber.strutanim'] });
+    case 'add_basic_physics': return delay({ path: 'data/pleasurehorizons/asset_sync/strut/physics/models/entities/girls/nude/amber.json', added: ['boobL', 'boobR', 'assL', 'assR'] });
     case 'read_model': return delay({
       version: 101, unitsPerBlock: 16, boundsMin: [0, 0, 0], boundsMax: [0, 0, 0], textures: [{ name: 't', width: 64, height: 64, uvWidth: 64, uvHeight: 64 }],
       groupBones: [{ name: 'body', parentIndex: -1, pivot: [0, 12, 0], rotation: [0, 0, 0], elements: [{ kind: 1, index: 0 }] }, { name: 'head', parentIndex: 0, pivot: [0, 24, 0], rotation: [0, 0, 0], elements: [{ kind: 1, index: 1 }] }],

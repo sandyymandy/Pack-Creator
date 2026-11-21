@@ -289,7 +289,7 @@ fn cues_and_sounds_are_checked_against_what_exists() {
 
 #[test]
 fn an_animation_that_cannot_be_read_is_reported() {
-    let (found, cues) = cues::animation("data/pleasurehorizons/asset_sync/strut/animations/base.amber.strutanim", b"not an animation at all, just text");
+    let (found, cues) = cues::animation("data/pleasurehorizons/asset_sync/strut/animations/entities/girls/base.amber.strutanim", b"not an animation at all, just text");
 
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].code, "bad-animation");
@@ -375,14 +375,14 @@ fn the_games_own_armour_and_physics_match_its_models() {
 
 #[test]
 fn a_bone_that_is_not_in_the_model_is_found() {
-    let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../src/main/resources/assets/pleasurehorizons/strut/models/nude/lucy.strutmodel");
+    let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../src/main/resources/assets/pleasurehorizons/strut/models/entities/girls/nude/lucy.strutmodel");
 
     if !assets.exists() {
         return;
     }
 
     let dir = tempfile::tempdir().unwrap();
-    let model = dir.path().join("data/pleasurehorizons/asset_sync/strut/models/nude/lucy.strutmodel");
+    let model = dir.path().join("data/pleasurehorizons/asset_sync/strut/models/entities/girls/nude/lucy.strutmodel");
 
     std::fs::create_dir_all(model.parent().unwrap()).unwrap();
     std::fs::copy(&assets, &model).unwrap();
@@ -397,7 +397,7 @@ fn a_bone_that_is_not_in_the_model_is_found() {
     assert!(has("armour-extends-missing"));
     assert_eq!(found.iter().filter(|d| d.code == "armour-unknown-bone").count(), 1, "boobL is a real bone");
 
-    let physics = "data/pleasurehorizons/asset_sync/strut/physics/models/nude/lucy.json";
+    let physics = "data/pleasurehorizons/asset_sync/strut/physics/models/entities/girls/nude/lucy.json";
     let found = check_text(physics, r#"{ "version": 1, "bones": { "boobs": {}, "tail_of_a_dragon": {} } }"#, &reference(), &facts);
 
     assert!(found.iter().any(|d| d.code == "physics-unknown-bone" && d.message.contains("tail_of_a_dragon")));

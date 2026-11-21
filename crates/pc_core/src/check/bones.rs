@@ -15,19 +15,17 @@ const GAME_ARMOUR: [&str; 5] = ["girl", "kobold", "lucy", "mika", "momo"];
 /// The armour texture the game ships.
 const GAME_ARMOUR_TEXTURE: &str = "textures/armor/armor.png";
 
-/// Where a girl's models are.
-fn model_path(variant: &str, girl: &str) -> String {
-    format!("data/{GAME_NAMESPACE}/{ASSET_SYNC}/strut/models/{variant}/{girl}.strutmodel")
-}
+/// The bones of a girl's model the pack has (where format 3 keeps it, or where it was kept before), or None when it has not got that model (or it could not be read), in which
+/// case no name can be judged.
+fn bones_of<'a>(facts: &'a PackFacts, variant: &str, girl: &str) -> Option<&'a BTreeSet<String>> {
+    let at = |path: String| facts.model_bones.get(&format!("data/{GAME_NAMESPACE}/{ASSET_SYNC}/{path}"));
 
-/// The bones of a model the pack has, or None when it has not got that model (or it could not be read), in which case no name can be judged.
-fn bones_of<'a>(facts: &'a PackFacts, rel: &str) -> Option<&'a BTreeSet<String>> {
-    facts.model_bones.get(rel)
+    at(crate::paths::girl_model(variant, girl)).or_else(|| at(crate::paths::girl_model_old(variant, girl)))
 }
 
 /// The bones of either of a girl's models: what armour and a merchant's clothes name may be a bone of her clothes as well as of her body.
 fn girl_bones(facts: &PackFacts, girl: &str) -> Option<BTreeSet<String>> {
-    match (bones_of(facts, &model_path("nude", girl)), bones_of(facts, &model_path("dressed", girl))) {
+    match (bones_of(facts, "nude", girl), bones_of(facts, "dressed", girl)) {
         (None, None) => None,
         (a, b) => Some(a.into_iter().chain(b).flatten().cloned().collect()),
     }
@@ -53,8 +51,7 @@ pub fn physics(sink: &mut Sink, root: &Node, rel: &str, facts: &PackFacts) {
     let parts: Vec<&str> = rel.split('/').collect();
     let (Some(variant), Some(file)) = (parts.get(parts.len().wrapping_sub(2)), parts.last()) else { return };
     let girl = file.trim_end_matches(".json");
-    let model = model_path(variant, girl);
-    let Some(bones) = bones_of(facts, &model) else { return };
+    let Some(bones) = bones_of(facts, variant, girl) else { return };
 
     if let Some(listed) = root.get("bones").and_then(|m| m.value.as_object()) {
         for member in listed {

@@ -711,7 +711,7 @@ fn sim_girls(app: State<App>) -> Reply<Vec<SimGirl>> {
         };
 
         let id = located.id.unwrap_or_default();
-        let has_model = all_files.iter().any(|f| f.ends_with(&format!("/strut/models/nude/{id}.strutmodel")) || f.ends_with(&format!("/strut/models/dressed/{id}.strutmodel")));
+        let has_model = ["nude", "dressed"].iter().any(|kind| all_files.iter().any(|f| f.ends_with(&format!("/{}", pc_core::paths::girl_model(kind, &id))) || f.ends_with(&format!("/{}", pc_core::paths::girl_model_old(kind, &id)))));
 
         girls.push(SimGirl { id, file: rel, body_type, example: false, has_model });
     }
@@ -757,6 +757,8 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
     let tag = |f: &String| if from_zip { format!("{}{f}", examples::PREFIX) } else { f.clone() };
     let find = |suffix: String| files.iter().find(|f| (from_zip || f.contains("/asset_sync/")) && f.ends_with(&suffix)).map(tag);
     let at = |suffix: String| files.iter().find(|f| f.ends_with(&suffix)).map(tag);
+    /* A file where format 3 keeps it, or where it was kept before (a pack not yet updated, or the examples). */
+    let find_either = |new: String, old: String| find(format!("/{new}")).or_else(|| find(format!("/{old}")));
     let mut animations = Vec::new();
 
     /* The files the game looks a clip up in, in its order: her own file of the scene, the file for her skeleton (her body type: `<scene>.<skeleton>.strutanim`), the shared file of the
@@ -767,7 +769,7 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
     let mut order = Vec::new();
 
     if find(format!("/strut/scenes/{scene_id}.strutscene")).is_some() {
-        let skeleton = skeleton_path(&root, from_zip, find(format!("/strut/models/nude/{girl_id}.strutmodel")).or_else(|| find(format!("/strut/models/dressed/{girl_id}.strutmodel"))), body_type.as_deref());
+        let skeleton = skeleton_path(&root, from_zip, find_either(pc_core::paths::girl_model("nude", &girl_id), pc_core::paths::girl_model_old("nude", &girl_id)).or_else(|| find_either(pc_core::paths::girl_model("dressed", &girl_id), pc_core::paths::girl_model_old("dressed", &girl_id))), body_type.as_deref());
 
         order.push(format!("/strut/animations/scenes/{scene_id}/host/owners/{girl_id}.strutanim"));
 
@@ -789,8 +791,10 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
     }
 
     order.push(format!("/strut/animations/scenes/{scene_id}.strutanim"));
-    order.push(format!("/strut/animations/base.{girl_id}.strutanim"));
-    order.push("/strut/animations/base.strutanim".to_string());
+    order.push(format!("/{}", pc_core::paths::girl_base(&girl_id)));
+    order.push(format!("/{}", pc_core::paths::girl_base_old(&girl_id)));
+    order.push(format!("/{}", pc_core::paths::SHARED_BASE));
+    order.push(format!("/{}", pc_core::paths::SHARED_BASE_OLD));
 
     for suffix in order {
         if let Some(found) = find(suffix) {
@@ -801,7 +805,7 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
     /* The game's shared animations (the scene's own file and the base file) are in the game's jar, not in a pack: a girl without clips of her own plays them, so they are
        taken from the examples when the pack has none. */
     if !from_zip {
-        for suffix in [format!("/strut/animations/scenes/{scene_id}.strutanim"), "/strut/animations/base.strutanim".to_string()] {
+        for suffix in [format!("/strut/animations/scenes/{scene_id}.strutanim"), format!("/{}", pc_core::paths::SHARED_BASE), format!("/{}", pc_core::paths::SHARED_BASE_OLD)] {
             if !animations.iter().any(|a| a.ends_with(&suffix)) {
                 if let Some(shared) = examples::names().into_iter().find(|n| n.ends_with(&suffix)) {
                     animations.push(format!("{}{shared}", examples::PREFIX));
@@ -816,8 +820,8 @@ fn sim_files(app: State<App>, scene_id: String, girl_id: String, example: Option
     sounds_json.extend(if from_zip { at("/sounds.json".into()).into_iter().collect::<Vec<_>>() } else { files.iter().filter(|f| f.contains("/asset_sync/") && f.ends_with("/sounds.json")).cloned().collect::<Vec<_>>() });
 
     Ok(SimFiles {
-        nude: find(format!("/strut/models/nude/{girl_id}.strutmodel")),
-        dressed: find(format!("/strut/models/dressed/{girl_id}.strutmodel")),
+        nude: find_either(pc_core::paths::girl_model("nude", &girl_id), pc_core::paths::girl_model_old("nude", &girl_id)),
+        dressed: find_either(pc_core::paths::girl_model("dressed", &girl_id), pc_core::paths::girl_model_old("dressed", &girl_id)),
         texture: find(format!("/textures/entities/{girl_id}.png")),
         animations,
         male_animations,
@@ -944,9 +948,9 @@ fn viewer_files(app: State<App>, rel: String) -> Reply<ViewerFiles> {
     let mut models: Vec<String> = Vec::new();
 
     for kind in ["nude", "dressed"] {
-        let wanted = format!("/strut/models/{kind}/{id}.strutmodel");
+        let (wanted, old) = (format!("/{}", pc_core::paths::girl_model(kind, &id)), format!("/{}", pc_core::paths::girl_model_old(kind, &id)));
 
-        models.extend(files.iter().filter(|f| f.ends_with(&wanted)).cloned());
+        models.extend(files.iter().filter(|f| f.ends_with(&wanted) || f.ends_with(&old)).cloned());
     }
 
     let texture = files.iter().find(|f| f.ends_with(&format!("/textures/entities/{id}.png"))).cloned();
@@ -956,7 +960,7 @@ fn viewer_files(app: State<App>, rel: String) -> Reply<ViewerFiles> {
         .filter(|f| {
             let n = f.rsplit('/').next().unwrap_or("");
 
-            n == format!("base.{id}.strutanim") || n.ends_with(&format!("-{id}.strutanim")) || n == "base.strutanim"
+            n == format!("base.{id}.strutanim") || n.ends_with(&format!("-{id}.strutanim")) || n == "base.strutanim" || f.contains(&format!("/scenes/")) && f.contains(&format!("/owners/{id}.strutanim"))
         })
         .cloned()
         .collect();
@@ -1099,7 +1103,7 @@ struct PhysicsAdded {
 fn add_basic_physics(app: State<App>, rel: String) -> Reply<PhysicsAdded> {
     let (root, _) = app.open()?;
     let path = if rel.contains("/strut/models/") && rel.ends_with(".strutmodel") {
-        rel.replace("/strut/models/", "/strut/physics/models/").trim_end_matches(".strutmodel").to_string() + ".json"
+        pc_core::paths::physics_of(&rel)
     } else {
         return Err(format!("{rel} is not a model in a pack's strut/models folder."));
     };
@@ -1405,7 +1409,7 @@ fn guess_body_type(bones: Vec<String>) -> Option<String> {
     for name in examples::names() {
         let Some(id) = name.strip_prefix("data/pleasurehorizons/girls/").and_then(|n| n.strip_suffix(".json")) else { continue };
         let Some(body) = examples::text(&name).and_then(|t| body_type_of(&t)) else { continue };
-        let Some(model_path) = examples::names().into_iter().find(|n| n.ends_with(&format!("/nude/{id}.strutmodel"))) else { continue };
+        let Some(model_path) = examples::names().into_iter().find(|n| n.ends_with(&format!("/nude/{id}.strutmodel")) && !n.contains("/armour/")) else { continue };
         let Some(model) = examples::bytes(&model_path).and_then(|b| pc_core::strut_model::read(&b).ok()) else { continue };
         let theirs: BTreeSet<&str> = model.group_bones.iter().map(|b| b.name.as_str()).collect();
         let score = names.intersection(&theirs).count() as f64 * 2.0 / (names.len() + theirs.len()).max(1) as f64;

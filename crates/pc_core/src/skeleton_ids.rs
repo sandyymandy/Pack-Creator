@@ -86,7 +86,7 @@ pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
         }
 
         /* Only the models that are a body get an id: not armour, blocks or items, which are fitted to a body or are not one. */
-        if !matches!(parts[5], "nude" | "dressed" | "male") {
+        if !crate::paths::is_body_model(&parts[3..].join("/").trim_start_matches("strut/").to_string()) {
             continue;
         }
 
@@ -94,7 +94,7 @@ pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
         let stem = parts[parts.len() - 1].trim_end_matches(".strutmodel");
         let default = match bodies.get(stem) {
             Some(body) => format!("{}:{}", crate::layout::GAME_NAMESPACE, body),
-            None if stem == "male" || stem == "player" || parts[5] == "male" => MALE_ID.to_string(),
+            None if stem == "male" || stem == "player" || rel.contains("/models/male/") || rel.contains("/models/entities/male/") => MALE_ID.to_string(),
             None => format!("{namespace}:{stem}"),
         };
         let id = overrides.get(stem).cloned().unwrap_or(default);
@@ -265,7 +265,7 @@ mod tests {
 
         let first = plan(&copy, &BTreeMap::new());
 
-        assert!(first.assignments.iter().filter(|a| a.kind == Kind::Model).all(|a| a.rel.contains("/models/nude/") || a.rel.contains("/models/dressed/") || a.rel.contains("/models/male/")));
+        assert!(first.assignments.iter().filter(|a| a.kind == Kind::Model).all(|a| a.rel.contains("/nude/") || a.rel.contains("/dressed/") || a.rel.contains("/male/")));
 
         assert!(first.unreadable.is_empty(), "{:?}", first.unreadable);
         assert!(first.assignments.iter().any(|a| a.kind == Kind::Model && a.owner == "jenny" && a.id == "pleasurehorizons:jenny"));

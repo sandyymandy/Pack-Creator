@@ -85,7 +85,7 @@ pub fn convert(text: &str, source_name: &str, role: &Role, girl: &str, stamp_mod
             let mut notes: Vec<Note> = converted.findings.items.iter().map(note_of).collect();
 
             notes.push(Note { level: Level::Kept, message: format!("The model: {} bones, {} cubes.", converted.model.group_bones.len(), converted.model.cubes.len()) });
-            Ok(Output { rel: format!("{SYNC}/strut/models/{variant}/{girl}.strutmodel"), bytes, notes: collapse(notes) })
+            Ok(Output { rel: format!("{SYNC}/{}", crate::paths::girl_model(variant, &girl)), bytes, notes: collapse(notes) })
         }
         _ => {
             if kind_of(source_name) == Some("model") {
@@ -111,7 +111,7 @@ pub fn convert(text: &str, source_name: &str, role: &Role, girl: &str, stamp_mod
             let rel = match role {
                 Role::AnimationBase => {
                     rename_clips(&mut doc, "base");
-                    format!("{SYNC}/strut/animations/base.{girl}.strutanim")
+                    format!("{SYNC}/{}", crate::paths::girl_base(&girl))
                 }
                 Role::AnimationScene(scene) => {
                     let scene = lower_id(scene, "a scene id")?;
@@ -162,7 +162,7 @@ mod tests {
 
         let output = convert(GEO, "x.geo.json", &Role::ModelDressed, "amy", None).unwrap();
 
-        assert_eq!(output.rel, "data/pleasurehorizons/asset_sync/strut/models/dressed/amy.strutmodel");
+        assert_eq!(output.rel, "data/pleasurehorizons/asset_sync/strut/models/entities/girls/dressed/amy.strutmodel");
         assert!(!output.bytes.is_empty());
     }
 
@@ -171,7 +171,7 @@ mod tests {
         let base = convert(ANIMATION, "old.animation.json", &Role::AnimationBase, "amy", Some(GEO)).unwrap();
         let clips = crate::strut_anim::read(&base.bytes).unwrap();
 
-        assert_eq!(base.rel, "data/pleasurehorizons/asset_sync/strut/animations/base.amy.strutanim");
+        assert_eq!(base.rel, "data/pleasurehorizons/asset_sync/strut/animations/entities/girls/base.amy.strutanim");
         assert_eq!(clips[0].name, "animation.base.wave");
         assert_eq!(clips[0].events[0].payload, "hello");
 

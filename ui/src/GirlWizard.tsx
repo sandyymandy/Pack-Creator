@@ -51,7 +51,7 @@ export function GirlWizard({ choices, onCreated }: { choices: Choices | null; on
   }, []);
 
   const sameBody = examples.filter(g => g.body_type === bodyType);
-  const files = mode === 'example' && exampleId ? { nude: `${EXAMPLE}strut/models/nude/${exampleId}.strutmodel`, dressed: `${EXAMPLE}strut/models/dressed/${exampleId}.strutmodel`, texture: `${EXAMPLE}textures/entities/${exampleId}.png` } : { nude, dressed, texture };
+  const files = mode === 'example' && exampleId ? { nude: `${EXAMPLE}strut/models/entities/girls/nude/${exampleId}.strutmodel`, dressed: `${EXAMPLE}strut/models/entities/girls/dressed/${exampleId}.strutmodel`, texture: `${EXAMPLE}textures/entities/${exampleId}.png` } : { nude, dressed, texture };
 
   /* Starting from a base girl of the body type chosen: the first one, until another is picked. */
   useEffect(() => {
@@ -201,7 +201,7 @@ export function GirlWizard({ choices, onCreated }: { choices: Choices | null; on
           <p class="muted">These will be made:</p>
           <ul class="wiz-files">
             <li>girls/{id}.json: her profile</li>
-            <li>asset_sync/strut/models/nude/{id}.strutmodel and dressed/{id}.strutmodel</li>
+            <li>asset_sync/strut/models/entities/girls/nude/{id}.strutmodel and dressed/{id}.strutmodel</li>
             <li>asset_sync/textures/entities/{id}.png</li>
             <li>asset_sync/strut/event_bindings/girls/{id}.json: what her cues play and say (empty)</li>
             {physics && <li>asset_sync/strut/physics/models/.../{id}.json: basic physics</li>}

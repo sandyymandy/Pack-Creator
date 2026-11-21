@@ -6,11 +6,11 @@ Everything below is inside `data/pleasurehorizons/asset_sync/` (a girl's own fil
 
 | File | Path |
 |---|---|
-| Nude model | `strut/models/nude/<girl>.strutmodel` |
-| Dressed model | `strut/models/dressed/<girl>.strutmodel` (leave it out for a girl who is always nude) |
+| Nude model | `strut/models/entities/girls/nude/<girl>.strutmodel` |
+| Dressed model | `strut/models/entities/girls/dressed/<girl>.strutmodel` (leave it out for a girl who is always nude) |
 | Texture | `textures/entities/<girl>.png` |
-| Animations | `strut/animations/` ([scene animations](doc:animations)) |
-| Physics | `strut/physics/` |
+| Animations | `strut/animations/entities/girls/base.<girl>.strutanim` for her everyday ones, `strut/animations/scenes/` for scenes ([scene animations](doc:animations)) |
+| Physics | `strut/physics/models/entities/girls/nude/<girl>.json` (it sits where its model's path puts it) |
 | Armour looks | `strut/armour/` |
 | Sounds and bindings | `sounds.json`, `strut/event_bindings/` ([cues](doc:cues)) |
 | Language | `lang/` |

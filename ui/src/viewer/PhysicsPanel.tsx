@@ -9,7 +9,7 @@ import type { Viewer as Scene } from './scene';
  * Physics Panel
  * ================================================================= */
 
-/** Where the physics file for a model is: `strut/models/<variant>/<id>.strutmodel` has `strut/physics/models/<variant>/<id>.json`. */
+/** Where the physics file for a model is: `strut/models/<rest>.strutmodel` has `strut/physics/models/<rest>.json`. */
 export function physicsPathOf(model: string): string | null {
   return model.includes('/strut/models/') && model.endsWith('.strutmodel')
     ? model.replace('/strut/models/', '/strut/physics/models/').replace(/\.strutmodel$/, '.json')

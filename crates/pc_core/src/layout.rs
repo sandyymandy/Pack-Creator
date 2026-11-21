@@ -138,15 +138,15 @@ mod tests {
     fn knows_what_is_sent_to_players() {
         let base = "data/pleasurehorizons/asset_sync/";
 
-        assert_eq!(locate(&format!("{base}strut/models/nude/amber.strutmodel")).kind, FileKind::Model);
-        assert_eq!(locate(&format!("{base}strut/animations/base.amber.strutanim")).kind, FileKind::Animation);
+        assert_eq!(locate(&format!("{base}strut/models/entities/girls/nude/amber.strutmodel")).kind, FileKind::Model);
+        assert_eq!(locate(&format!("{base}strut/animations/entities/girls/base.amber.strutanim")).kind, FileKind::Animation);
         assert_eq!(locate(&format!("{base}textures/entities/amber.png")).kind, FileKind::Texture);
         assert_eq!(locate(&format!("{base}sounds/amber/moan1.ogg")).kind, FileKind::Sound);
         assert_eq!(locate(&format!("{base}sounds.json")).kind, FileKind::SoundsJson);
         assert_eq!(locate(&format!("{base}lang/en_us.json")).kind, FileKind::Lang);
         assert_eq!(locate(&format!("{base}strut/event_bindings/girls/amber.json")).kind, FileKind::EventBindings);
         assert_eq!(locate(&format!("{base}keyframe_events/amber.json")).kind, FileKind::KeyframeEvents);
-        assert_eq!(locate(&format!("{base}strut/physics/models/nude/amber.json")).kind, FileKind::Physics);
+        assert_eq!(locate(&format!("{base}strut/physics/models/entities/girls/nude/amber.json")).kind, FileKind::Physics);
     }
 
     #[test]

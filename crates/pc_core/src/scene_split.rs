@@ -14,7 +14,7 @@ pub const MALE_ROOT: &str = "steve";
 /// The skeleton id of the base mod's male model.
 pub const MALE_ID: &str = "pleasurehorizons:male";
 
-/// The base mod's male model (`models/nude/player.strutmodel`), as it was when this was built: the proof poses it, and its bone names give the fingerprint of the male's clips.
+/// The base mod's male model (`models/entities/male/nude/player.strutmodel`), as it was when this was built: the proof poses it, and its bone names give the fingerprint of the male's clips.
 const MALE_MODEL: &[u8] = include_bytes!("../resources/male_player.strutmodel");
 
 /// What each bone of the old male rig became in the new male model, checked against both models and confirmed. A bone of the old rig that is not here (the penis details, the

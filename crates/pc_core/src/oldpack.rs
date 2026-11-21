@@ -662,18 +662,18 @@ pub fn import_girl(pack: &OldPack, request: &Request, reference: &Reference) -> 
             has_tip = converted.model.group_bones.iter().any(|b| b.name == "nut");
         }
 
-        files.push((format!("{SYNC}/strut/models/{kind}/{id}.strutmodel"), bytes));
+        files.push((format!("{SYNC}/{}", crate::paths::girl_model(kind, &id)), bytes));
 
         /* Her physics file, if the old pack has one for this model. */
         let physics = pack.root.join(format!("strut/physics/models/{kind}/{}.json", request.raw_id));
 
         if let Ok(bytes) = fs::read(&physics) {
-            files.push((format!("{SYNC}/strut/physics/models/{kind}/{id}.json"), bytes));
+            files.push((format!("{SYNC}/{}", crate::paths::girl_physics(kind, &id)), bytes));
             notes.push(Note { level: Level::Kept, message: format!("Her {kind} physics file.") });
         } else if request.physics_preset {
             match basic_physics(&bones_of[kind]) {
                 Some((preset, names)) => {
-                    files.push((format!("{SYNC}/strut/physics/models/{kind}/{id}.json"), (serde_json::to_string_pretty(&preset).unwrap() + "\n").into_bytes()));
+                    files.push((format!("{SYNC}/{}", crate::paths::girl_physics(kind, &id)), (serde_json::to_string_pretty(&preset).unwrap() + "\n").into_bytes()));
                     notes.push(Note { level: Level::Review, message: format!("She had no {kind} physics file, so physics was made for {} (spring bones: an old model is made of cubes, and flesh needs meshes). Tune it in the physics file.", names.join(", ")) });
                 }
                 None => notes.push(Note { level: Level::Kept, message: format!("She had no {kind} physics file, and no bone of her {kind} model has a name the basic setup knows (boobL, boobR, belly, cheekL, cheekR, assL, assR...), so none was made.") }),
@@ -702,7 +702,7 @@ pub fn import_girl(pack: &OldPack, request: &Request, reference: &Reference) -> 
         let split = split_animations(&old, &id, &imported.scenes, &mut notes);
         let base_count = split.base.get("animations").and_then(Value::as_object).map_or(0, Map::len);
 
-        convert_file(&split.base, &format!("base.{id}"), format!("{SYNC}/strut/animations/base.{id}.strutanim"), &mut files, &mut notes)?;
+        convert_file(&split.base, &format!("base.{id}"), format!("{SYNC}/{}", crate::paths::girl_base(&id)), &mut files, &mut notes)?;
 
         for (scene_id, doc) in &split.scene_files {
             convert_file(doc, &format!("{scene_id}-{id}"), format!("{SYNC}/strut/animations/scenes/{scene_id}-{id}.strutanim"), &mut files, &mut notes)?;
@@ -938,9 +938,9 @@ mod tests {
         for expected in [
             "data/pleasurehorizons/girls/zoe.json",
             "data/pleasurehorizons/scenes/hug.json",
-            "data/pleasurehorizons/asset_sync/strut/models/nude/zoe.strutmodel",
-            "data/pleasurehorizons/asset_sync/strut/models/dressed/zoe.strutmodel",
-            "data/pleasurehorizons/asset_sync/strut/animations/base.zoe.strutanim",
+            "data/pleasurehorizons/asset_sync/strut/models/entities/girls/nude/zoe.strutmodel",
+            "data/pleasurehorizons/asset_sync/strut/models/entities/girls/dressed/zoe.strutmodel",
+            "data/pleasurehorizons/asset_sync/strut/animations/entities/girls/base.zoe.strutanim",
             "data/pleasurehorizons/asset_sync/strut/animations/scenes/hug-zoe.strutanim",
             "data/pleasurehorizons/asset_sync/strut/event_bindings/girls/zoe.json",
             "data/pleasurehorizons/asset_sync/textures/entities/zoe.png",
@@ -1100,9 +1100,9 @@ mod tests {
         let first = import_girl(&opened, &Request { raw_id: "zoe", profile: Some(profile), body_type: "jenny", namespace: "pleasurehorizons", liquid: false, existing_files: &existing, existing_scenes: &[], rules: &rules, physics_preset: true, skip_shared: false, taken_tame_items: &[], scene_plan: None }, &Reference::builtin()).unwrap();
         let names: Vec<&str> = first.files.iter().map(|(p, _)| p.as_str()).collect();
 
-        assert!(names.contains(&"data/pleasurehorizons/asset_sync/strut/physics/models/nude/zoe.json"), "{names:?}");
+        assert!(names.contains(&"data/pleasurehorizons/asset_sync/strut/physics/models/entities/girls/nude/zoe.json"), "{names:?}");
 
-        let physics: Value = serde_json::from_slice(&first.files.iter().find(|(p, _)| p.ends_with("physics/models/nude/zoe.json")).unwrap().1).unwrap();
+        let physics: Value = serde_json::from_slice(&first.files.iter().find(|(p, _)| p.ends_with("physics/models/entities/girls/nude/zoe.json")).unwrap().1).unwrap();
 
         assert_eq!(physics["bones"]["boobL"]["preset"], "soft-bone", "an old model is made of cubes, so its chest is a spring bone");
         assert!(physics.get("flesh").is_none());
@@ -1182,9 +1182,9 @@ entity.jenny.name=Jenny
         for expected in [
             "data/pleasurehorizons/girls/luna.json",
             "data/pleasurehorizons/scenes/sit.json",
-            "data/pleasurehorizons/asset_sync/strut/models/nude/luna.strutmodel",
-            "data/pleasurehorizons/asset_sync/strut/models/dressed/luna.strutmodel",
-            "data/pleasurehorizons/asset_sync/strut/animations/base.luna.strutanim",
+            "data/pleasurehorizons/asset_sync/strut/models/entities/girls/nude/luna.strutmodel",
+            "data/pleasurehorizons/asset_sync/strut/models/entities/girls/dressed/luna.strutmodel",
+            "data/pleasurehorizons/asset_sync/strut/animations/entities/girls/base.luna.strutanim",
             "data/pleasurehorizons/asset_sync/strut/animations/scenes/sit-luna.strutanim",
             "data/pleasurehorizons/asset_sync/strut/event_bindings/girls/luna.json",
             "data/pleasurehorizons/asset_sync/textures/entities/luna.png",

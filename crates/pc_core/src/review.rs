@@ -572,7 +572,7 @@ mod tests {
         assert!(files.contains(&"data/pleasurehorizons/scenes/stand.json"));
         assert!(files.contains(&"data/pleasurehorizons/asset_sync/strut/animations/scenes/stand-zoe.strutanim"));
 
-        let base = outcome.files.iter().find(|(p, _)| p.ends_with("animations/base.zoe.strutanim")).unwrap();
+        let base = outcome.files.iter().find(|(p, _)| p.ends_with("animations/entities/girls/base.zoe.strutanim")).unwrap();
         let base_clips = strut_anim::read(&base.1).unwrap();
 
         assert!(base_clips.iter().any(|c| c.name.ends_with("hug_fast")), "a clip no scene uses stays in her base file");

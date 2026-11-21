@@ -2,7 +2,7 @@
 
 Animations are `.strutanim` files in `data/pleasurehorizons/asset_sync/strut/animations/`. They are binary: make them in Blockbench with the Strut Toolkit (the **Blockbench** button installs both) and save them to the pack. The Pack Creator never asks you to write one by hand.
 
-A scene is played by **one model per character**: the girl has her model and the male has the base mod's own male model ([the male](doc:male)). Each plays its own clips, and the two play together as one scene. This is pack format 2. A pack made before it is offered an update when you open it ([updating a pack](doc:male)).
+A scene is played by **one model per character**: the girl has her model and the male has the base mod's own male model ([the male](doc:male)). Each plays its own clips, and the two play together as one scene. This is pack format 3. A pack made before it is offered an update when you open it ([updating a pack](doc:male)).
 
 ## The layout of a scene
 
@@ -44,7 +44,7 @@ The **Skeleton ids** button in the top bar shows the ids of every model and anim
 
 ## Older files (format 1)
 
-Before format 2 a scene was a single file in the `scenes/` folder, with the male inside the girl's model: `<scene>-<girl>.strutanim`, `<scene>.<skeleton>.strutanim` or `<scene>.strutanim`. The game reads the role folder when there is one, so a single file left beside it is never played; the checks flag it. Her everyday animations are in `base.strutanim` (shared) and `base.<girl>.strutanim` (hers) and stay single files.
+Before format 2 a scene was a single file in the `scenes/` folder, with the male inside the girl's model: `<scene>-<girl>.strutanim`, `<scene>.<skeleton>.strutanim` or `<scene>.strutanim`. The game reads the role folder when there is one, so a single file left beside it is never played; the checks flag it. Her everyday animations are in `strut/animations/entities/base.strutanim` (shared) and `strut/animations/entities/girls/base.<girl>.strutanim` (hers) and stay single files.
 
 ### Choosing where to put an animation
 

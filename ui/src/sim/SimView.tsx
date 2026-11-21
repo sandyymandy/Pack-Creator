@@ -339,7 +339,7 @@ export function SimView({ sceneRel, girlRel }: { sceneRel: string; girlRel?: str
       assets.current = data;
 
       if (!data.dressed && !data.nude) {
-        setProblem(`${girl} has no model (strut/models/nude or dressed), so there is nothing to show.`);
+        setProblem(`${girl} has no model (strut/models/entities/girls/nude or dressed), so there is nothing to show.`);
         return;
       }
 

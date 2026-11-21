@@ -82,7 +82,7 @@ fn reference_for(body_type: &str) -> Option<(String, Model)> {
             continue;
         }
 
-        let model = examples::bytes(&format!("assets/pleasurehorizons/strut/models/nude/{id}.strutmodel")).and_then(|b| strut_model::read(&b).ok())?;
+        let model = examples::bytes(&format!("assets/pleasurehorizons/{}", pc_core::paths::girl_model("nude", id))).or_else(|| examples::bytes(&format!("assets/pleasurehorizons/{}", pc_core::paths::girl_model_old("nude", id)))).and_then(|b| strut_model::read(&b).ok())?;
 
         return Some((id.to_string(), model));
     }
@@ -202,8 +202,8 @@ pub fn create_girl(app: State<App>, request: NewGirl) -> Reply<CreatedGirl> {
     let profile = templates::girl(&GirlSpec { id: &id, name: &name, archetype: &request.archetype, body_type: &request.body_type, tame_item: if request.tame_item.is_empty() { "minecraft:allium" } else { &request.tame_item }, hitbox_height: 1.8 });
 
     write(&root, &mut written, &rel, profile.as_bytes())?;
-    write(&root, &mut written, &format!("{SYNC}/strut/models/nude/{id}.strutmodel"), &nude_bytes)?;
-    write(&root, &mut written, &format!("{SYNC}/strut/models/dressed/{id}.strutmodel"), &dressed_bytes)?;
+    write(&root, &mut written, &format!("{SYNC}/{}", pc_core::paths::girl_model("nude", &id)), &nude_bytes)?;
+    write(&root, &mut written, &format!("{SYNC}/{}", pc_core::paths::girl_model("dressed", &id)), &dressed_bytes)?;
     write(&root, &mut written, &format!("{SYNC}/textures/entities/{id}.png"), &texture_bytes)?;
     write(&root, &mut written, &format!("{SYNC}/strut/event_bindings/girls/{id}.json"), b"{\n  \"bindings\": {}\n}\n")?;
 
@@ -212,7 +212,7 @@ pub fn create_girl(app: State<App>, request: NewGirl) -> Reply<CreatedGirl> {
             let bones = pc_core::oldpack::physics_bones(model);
 
             if let Some((preset, names)) = pc_core::oldpack::basic_physics(&bones) {
-                write(&root, &mut written, &format!("{SYNC}/strut/physics/models/{kind}/{id}.json"), (serde_json::to_string_pretty(&preset).map_err(text)? + "\n").as_bytes())?;
+                write(&root, &mut written, &format!("{SYNC}/{}", pc_core::paths::girl_physics(kind, &id)), (serde_json::to_string_pretty(&preset).map_err(text)? + "\n").as_bytes())?;
                 notes.push(format!("A basic {kind} physics file was made for {}. Tune it in Blockbench's Physics tab.", names.join(", ")));
             }
         }
