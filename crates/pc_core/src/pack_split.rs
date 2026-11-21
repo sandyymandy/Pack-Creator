@@ -619,4 +619,35 @@ mod tests {
         println!("would change {wrote} files and remove {removed} (written: {})", std::env::var("PH_WRITE").is_ok());
         let _ = std::fs::remove_dir_all(&stage);
     }
+
+    /// Takes the skeleton id back off models that were given one by mistake (armour, blocks, items), in a resources folder: `PH_RESOURCES=<path> cargo test -p pc_core -- --ignored take_ids_off`.
+    #[test]
+    #[ignore]
+    fn take_ids_off() {
+        let resources = std::path::PathBuf::from(std::env::var("PH_RESOURCES").expect("PH_RESOURCES")).join("assets/pleasurehorizons/strut/models");
+        let mut count = 0;
+
+        for folder in ["armour", "block", "item"] {
+            let mut stack = vec![resources.join(folder)];
+
+            while let Some(dir) = stack.pop() {
+                for entry in std::fs::read_dir(dir).unwrap().flatten() {
+                    let path = entry.path();
+
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else if path.extension().map_or(false, |e| e == "strutmodel") {
+                        let bytes = std::fs::read(&path).unwrap();
+
+                        if strut_model::read(&bytes).unwrap().skeleton_id.is_some() {
+                            std::fs::write(&path, strut_model::set_skeleton_id(&bytes, None).unwrap()).unwrap();
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        println!("took the id off {count} models");
+    }
 }
