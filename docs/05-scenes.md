@@ -1,6 +1,6 @@
 # Scene files
 
-`data/<namespace>/scenes/<scene_id>.json`. A scene file says when a scene can play, who it fits and how it behaves. The animations themselves are separate ([scene animations](doc:animations)).
+`data/<namespace>/scenes/<scene_id>.json`. A scene file says when a scene can play, who it fits and how it behaves. The animations themselves are separate: a folder of clips for each role in the scene, and a layout file ([scene animations](doc:animations)).
 
 ```json
 {
@@ -67,4 +67,4 @@ With `use_keyframe_events` on, the scene's clips change on the cues in the anima
 
 ## Naming
 
-The file name is the scene's id. Clips inside the animation must be named `animation.<scene>.<role>`, so renaming a scene means renaming its clips too. The checks flag a clip that does not follow the pattern.
+The file name is the scene's id. The scene's layout (`strut/scenes/<scene>.strutscene`) and its animation folder (`strut/animations/scenes/<scene>/`) are named for it too, and the clips inside must be named `animation.<scene>.<part>`, so renaming a scene means renaming those as well. The checks flag a clip that does not follow the pattern.
