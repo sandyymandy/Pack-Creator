@@ -2,6 +2,7 @@
 //! weights and armatures are read past, not kept (the viewer draws a model in its rest pose). The layout is Strut's `BinaryModelReader`; keep the two in step.
 
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 pub type Vec3 = [f32; 3];
 
@@ -116,6 +117,8 @@ pub struct BoneAt {
 /// The same for a cube: its origin (pivot), rotation, and the two corners of its box.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CubeAt {
+    pub start: usize,
+    pub end: usize,
     pub origin: usize,
     pub rotation: usize,
     pub from: usize,
@@ -130,6 +133,11 @@ pub struct Offsets {
     pub armature_parents: Vec<usize>,
     /// Where the extension sections start (the count of them when the file has any), which is the end of the file when it has none.
     pub extensions_at: usize,
+    /// Where the sections of bones, meshes, cubes and armatures start (a section ends where the next starts).
+    pub bones_start: usize,
+    pub meshes_start: usize,
+    pub cubes_start: usize,
+    pub armatures_start: usize,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -271,6 +279,8 @@ pub fn read(bytes: &[u8]) -> Result<Model, String> {
     let mut group_bones = Vec::new();
     let mut offsets = Offsets::default();
 
+    offsets.bones_start = r.at;
+
     for _ in 0..bone_count {
         let start = r.at;
         let name = name_of(&strings, r.u16("a bone name")?, "a bone")?;
@@ -295,6 +305,8 @@ pub fn read(bytes: &[u8]) -> Result<Model, String> {
     }
 
     let mut meshes = Vec::new();
+
+    offsets.meshes_start = r.at;
 
     for _ in 0..mesh_count {
         let name = name_of(&strings, r.u16("a mesh name")?, "a mesh")?;
@@ -356,7 +368,10 @@ pub fn read(bytes: &[u8]) -> Result<Model, String> {
 
     let mut cubes = Vec::new();
 
+    offsets.cubes_start = r.at;
+
     for _ in 0..cube_count {
+        let cube_start = r.at;
         let name = name_of(&strings, r.u16("a cube name")?, "a cube")?;
         let texture_index = r.u16("a cube texture")?;
         let origin_at = r.at;
@@ -368,7 +383,9 @@ pub fn read(bytes: &[u8]) -> Result<Model, String> {
         let to_at = r.at;
         let to = r.vec3("a cube's to")?;
 
-        offsets.cubes.push(CubeAt { origin: origin_at, rotation: rotation_at, from: from_at, to: to_at });
+        let cube_slot = offsets.cubes.len();
+
+        offsets.cubes.push(CubeAt { start: cube_start, end: 0, origin: origin_at, rotation: rotation_at, from: from_at, to: to_at });
         let inflate = r.f32("a cube's inflate")?;
         let cube_flags = r.u8("a cube's flags")?;
         let face_count = r.u8("a cube's face count")?;
@@ -378,10 +395,13 @@ pub fn read(bytes: &[u8]) -> Result<Model, String> {
             faces.push(CubeFace { face_id: r.u8("a face id")?, u1: r.f32("a face u1")?, v1: r.f32("a face v1")?, u2: r.f32("a face u2")?, v2: r.f32("a face v2")?, uv_rotation: r.u8("a face's uv rotation")? });
         }
 
+        offsets.cubes[cube_slot].end = r.at;
         cubes.push(Cube { name, texture_index, origin, rotation, from, to, inflate, mirror: cube_flags & 2 != 0, box_uv: cube_flags & 4 != 0, faces });
     }
 
     let mut armatures = Vec::new();
+
+    offsets.armatures_start = r.at;
 
     for _ in 0..armature_count {
         let name = name_of(&strings, r.u16("an armature name")?, "an armature")?;
@@ -438,6 +458,97 @@ pub fn read(bytes: &[u8]) -> Result<Model, String> {
     }
 
     Ok(Model { version, units_per_block: units, bounds_min, bounds_max, textures, group_bones, meshes, cubes, armature_count, armatures, extensions, skeleton_id, offsets })
+}
+
+/// Writes the model again without the group bones at these indices and the cubes only they hold. Every other byte is copied as it was (meshes, skinning, armatures, extensions and
+/// the strings), and the indices that point at bones and cubes are renumbered. A removed bone that holds a mesh, or that an armature hangs off, is refused.
+pub fn remove_bones(bytes: &[u8], remove: &std::collections::HashSet<usize>) -> Result<Vec<u8>, String> {
+    let model = read(bytes)?;
+    let o = &model.offsets;
+    let mut new_bone = vec![-1i32; model.group_bones.len()];
+    let mut kept = 0;
+
+    for i in 0..model.group_bones.len() {
+        if !remove.contains(&i) {
+            new_bone[i] = kept;
+            kept += 1;
+        }
+    }
+
+    for bone in model.group_bones.iter().enumerate().filter(|(i, _)| remove.contains(i)).map(|(_, b)| b) {
+        if bone.elements.iter().any(|e| e.kind == 0) {
+            return Err(format!("the bone {} holds a mesh", bone.name));
+        }
+    }
+
+    for armature in &model.armatures {
+        if armature.parent_group_bone >= 0 && remove.contains(&(armature.parent_group_bone as usize)) {
+            return Err(format!("the armature {} hangs off a bone that would be removed", armature.name));
+        }
+    }
+
+    /* The cubes of the bones that stay keep their order. */
+    let mut new_cube: BTreeMap<u16, u16> = BTreeMap::new();
+    let mut cube_order: Vec<usize> = Vec::new();
+
+    for bone in model.group_bones.iter().enumerate().filter(|(i, _)| !remove.contains(i)).map(|(_, b)| b) {
+        for element in bone.elements.iter().filter(|e| e.kind == 1) {
+            if !new_cube.contains_key(&element.index) {
+                new_cube.insert(element.index, cube_order.len() as u16);
+                cube_order.push(element.index as usize);
+            }
+        }
+    }
+
+    let mut out = bytes[..o.bones_start].to_vec();
+
+    for (i, bone) in model.group_bones.iter().enumerate().filter(|(i, _)| !remove.contains(i)) {
+        let at = &o.bones[i];
+        let parent = if bone.parent_index >= 0 { new_bone[bone.parent_index as usize] } else { -1 };
+
+        if parent < 0 && bone.parent_index >= 0 {
+            return Err(format!("the bone {} hangs off a bone that would be removed", bone.name));
+        }
+
+        out.extend_from_slice(&bytes[at.start..at.parent]);
+        out.extend_from_slice(&(parent as i16).to_le_bytes());
+        out.extend_from_slice(&bytes[at.parent + 2..at.rotation + 12 + 1]);
+        out.extend_from_slice(&(bone.elements.len() as u16).to_le_bytes());
+
+        for element in &bone.elements {
+            out.push(element.kind);
+            out.extend_from_slice(&(if element.kind == 1 { new_cube[&element.index] } else { element.index }).to_le_bytes());
+        }
+    }
+
+    out.extend_from_slice(&bytes[o.meshes_start..o.cubes_start]);
+
+    for cube in &cube_order {
+        out.extend_from_slice(&bytes[o.cubes[*cube].start..o.cubes[*cube].end]);
+    }
+
+    let armatures_at = out.len();
+
+    out.extend_from_slice(&bytes[o.armatures_start..]);
+
+    for (armature, at) in model.armatures.iter().zip(&o.armature_parents) {
+        if armature.parent_group_bone >= 0 {
+            let place = armatures_at + (at - o.armatures_start);
+
+            out[place..place + 2].copy_from_slice(&(new_bone[armature.parent_group_bone as usize] as i16).to_le_bytes());
+        }
+    }
+
+    out[12..14].copy_from_slice(&(kept as u16).to_le_bytes());
+    out[16..18].copy_from_slice(&(cube_order.len() as u16).to_le_bytes());
+
+    let back = read(&out).map_err(|e| format!("the model without those bones did not read back: {e}"))?;
+
+    if back.group_bones.len() != kept as usize || back.cubes.len() != cube_order.len() || back.meshes.len() != model.meshes.len() {
+        return Err("the model without those bones lost something it should have kept".into());
+    }
+
+    Ok(out)
 }
 
 /// The extension section that holds a model's skeleton id.

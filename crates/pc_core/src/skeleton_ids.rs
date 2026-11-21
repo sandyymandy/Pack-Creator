@@ -85,11 +85,16 @@ pub fn plan(root: &Path, overrides: &BTreeMap<String, String>) -> Plan {
             continue;
         }
 
+        /* Only the models that are a body get an id: not armour, blocks or items, which are fitted to a body or are not one. */
+        if !matches!(parts[5], "nude" | "dressed" | "partner") {
+            continue;
+        }
+
         let namespace = parts[1];
         let stem = parts[parts.len() - 1].trim_end_matches(".strutmodel");
         let default = match bodies.get(stem) {
             Some(body) => format!("{}:{}", crate::layout::GAME_NAMESPACE, body),
-            None if stem == "partner" || parts[5] == "partner" => PARTNER_ID.to_string(),
+            None if stem == "partner" || stem == "player" || parts[5] == "partner" => PARTNER_ID.to_string(),
             None => format!("{namespace}:{stem}"),
         };
         let id = overrides.get(stem).cloned().unwrap_or(default);
@@ -259,6 +264,8 @@ mod tests {
         copy_dir(&source, &copy);
 
         let first = plan(&copy, &BTreeMap::new());
+
+        assert!(first.assignments.iter().filter(|a| a.kind == Kind::Model).all(|a| a.rel.contains("/models/nude/") || a.rel.contains("/models/dressed/") || a.rel.contains("/models/partner/")));
 
         assert!(first.unreadable.is_empty(), "{:?}", first.unreadable);
         assert!(first.assignments.iter().any(|a| a.kind == Kind::Model && a.owner == "jenny" && a.id == "pleasurehorizons:jenny"));

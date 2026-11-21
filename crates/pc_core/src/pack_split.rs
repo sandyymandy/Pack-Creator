@@ -5,7 +5,6 @@
 //! A scene file is only converted when the proof says every bone is posed exactly as before. A girl whose partner rig differs from the rest gets a partner model of her own, and
 //! is reported. If any file cannot be converted, no model is stripped (the old scene files that remain still need `steve`).
 
-use crate::convert::model as raw;
 use crate::layout::ASSET_SYNC;
 use crate::scene_split::{self, PARTNER_ID, PARTNER_ROOT};
 use crate::skeleton_ids;
@@ -53,122 +52,35 @@ struct GirlModel {
     model: Model,
 }
 
-fn extension_payloads(bytes: &[u8], model: &Model) -> Result<Vec<(String, Vec<u8>)>> {
-    let mut sections = Vec::new();
-    let flags = u16::from_le_bytes([bytes[6], bytes[7]]);
-
-    if flags & 1 != 0 {
-        let mut at = model.offsets.extensions_at;
-        let u16_at = |at: usize| u16::from_le_bytes([bytes[at], bytes[at + 1]]) as usize;
-        let count = u16_at(at);
-
-        at += 2;
-
-        for _ in 0..count {
-            let name_length = u16_at(at);
-
-            at += 2;
-
-            let name = String::from_utf8_lossy(&bytes[at..at + name_length]).to_string();
-
-            at += name_length;
-
-            let length = u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]) as usize;
-
-            at += 4;
-            sections.push((name, bytes[at..at + length].to_vec()));
-            at += length;
-        }
-    }
-
-    Ok(sections)
-}
-
-/// The model without the partner's rig, with its skeleton id set. Everything else (bones, cubes, textures, other extension sections) is carried over as it was. A model with
-/// meshes or armatures is refused: the converter writes cubes only.
+/// The model without the partner's rig, with its skeleton id set. Everything else (bones, cubes, meshes, skinning, textures, other extension sections) is carried over byte for
+/// byte; only the partner's bones and cubes are cut out and the numbers that point at bones and cubes are renumbered.
 fn strip_partner(bytes: &[u8], model: &Model, skeleton_id: &str) -> std::result::Result<Vec<u8>, String> {
-    if !model.meshes.is_empty() || !model.armatures.is_empty() {
-        return Err("the model has meshes or armatures, which the stripper does not carry".into());
-    }
-
     let gone: HashSet<usize> = scene_split::subtree(model, PARTNER_ROOT).into_iter().collect();
-    let keep: Vec<usize> = (0..model.group_bones.len()).filter(|i| !gone.contains(i)).collect();
-    let mut new_index = vec![-1i32; model.group_bones.len()];
+    let without = strut_model::remove_bones(bytes, &gone)?;
 
-    for (n, old) in keep.iter().enumerate() {
-        new_index[*old] = n as i32;
-    }
-
-    let mut cube_map: BTreeMap<usize, u32> = BTreeMap::new();
-    let mut cubes = Vec::new();
-    let mut strings: Vec<String> = model.textures.iter().map(|t| t.name.clone()).collect();
-    let mut group_bones = Vec::new();
-
-    for old in &keep {
-        let bone = &model.group_bones[*old];
-        let mut elements = Vec::new();
-
-        for element in &bone.elements {
-            let index = *cube_map.entry(element.index as usize).or_insert_with(|| {
-                let c = &model.cubes[element.index as usize];
-
-                cubes.push(raw::Cube {
-                    name: c.name.clone(),
-                    texture: c.texture_index as u32,
-                    origin: c.origin.map(|v| v as f64),
-                    rotation: c.rotation.map(|v| v as f64),
-                    from: c.from.map(|v| v as f64),
-                    to: c.to.map(|v| v as f64),
-                    inflate: c.inflate as f64,
-                    mirror: c.mirror,
-                    box_uv: c.box_uv,
-                    faces: c.faces.iter().map(|f| raw::CubeFace { face_id: f.face_id as u32, u1: f.u1 as f64, v1: f.v1 as f64, u2: f.u2 as f64, v2: f.v2 as f64, uv_rotation: f.uv_rotation as i64 }).collect(),
-                });
-                strings.push(c.name.clone());
-                (cubes.len() - 1) as u32
-            });
-
-            elements.push(raw::Element { kind: 1, index });
-        }
-
-        strings.push(bone.name.clone());
-        group_bones.push(raw::GroupBone { name: bone.name.clone(), parent: if bone.parent_index >= 0 { new_index[bone.parent_index as usize] } else { -1 }, pivot: bone.pivot.map(|v| v as f64), rotation: bone.rotation.map(|v| v as f64), elements });
-    }
-
-    strings.sort();
-    strings.dedup();
-
-    let mut extensions = extension_payloads(bytes, model).map_err(|e| e.to_string())?;
-
-    extensions.retain(|(name, _)| name != strut_model::SKELETON_EXTENSION);
-
-    let mut payload = (skeleton_id.len() as u16).to_le_bytes().to_vec();
-
-    payload.extend_from_slice(skeleton_id.as_bytes());
-    extensions.insert(0, (strut_model::SKELETON_EXTENSION.to_string(), payload));
-
-    let rebuilt = raw::RawModel {
-        model_id: None,
-        bounds_min: model.bounds_min.map(|v| v as f64),
-        bounds_max: model.bounds_max.map(|v| v as f64),
-        strings,
-        textures: model.textures.iter().map(|t| raw::Texture { name: t.name.clone(), width: t.width as f64, height: t.height as f64, uv_width: t.uv_width as f64, uv_height: t.uv_height as f64 }).collect(),
-        group_bones,
-        cubes,
-        extensions,
-    };
-    let out = raw::encode(&rebuilt)?;
-    let back = strut_model::read(&out).map_err(|e| format!("the stripped model did not read back: {e}"))?;
-
-    if back.group_bones.len() != keep.len() || back.cubes.len() != cubes_len(model, &keep) {
-        return Err("the stripped model lost bones or cubes it should have kept".into());
-    }
-
-    Ok(out)
+    strut_model::set_skeleton_id(&without, Some(skeleton_id))
 }
 
-fn cubes_len(model: &Model, keep: &[usize]) -> usize {
-    keep.iter().flat_map(|i| model.group_bones[*i].elements.iter().map(|e| e.index)).collect::<HashSet<_>>().len()
+#[derive(Clone, Copy, PartialEq)]
+enum Owner {
+    Girl,
+    Body,
+    Shared,
+}
+
+/// The body types a scene says it is for (`body_types` in its scene file), looked for in every namespace of the pack.
+fn scene_bodies(root: &Path, scene: &str) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(root.join("data")) else { return Vec::new() };
+
+    for entry in entries.flatten() {
+        let file = entry.path().join("scenes").join(format!("{scene}.json"));
+
+        if let Some(json) = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()) {
+            return json.get("body_types").and_then(|b| b.as_array()).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default();
+        }
+    }
+
+    Vec::new()
 }
 
 fn id_path(id: &str) -> &str {
@@ -232,86 +144,128 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
             continue;
         }
 
-        /* Who it is for: base.<girl>, <scene>-<girl>, or <scene>.<skeleton>. */
-        let (scene, owner, by_girl) = if let Some(girl) = name.strip_prefix("base.") {
-            (None, girl.to_string(), true)
+        /* Who it is for: base.<girl>, base, <scene>-<girl>, <scene>.<skeleton>, or <scene> (everyone). */
+        let (scene, owner, kind) = if name == "base" {
+            (None, String::new(), Owner::Shared)
+        } else if let Some(girl) = name.strip_prefix("base.") {
+            (None, girl.to_string(), Owner::Girl)
         } else if in_scenes {
             match name.rsplit_once('-').filter(|(_, g)| models.iter().any(|m| m.stem == *g)) {
-                Some((scene, girl)) => (Some(scene.to_string()), girl.to_string(), true),
+                Some((scene, girl)) => (Some(scene.to_string()), girl.to_string(), Owner::Girl),
                 None => match name.rsplit_once('.') {
-                    Some((scene, body)) => (Some(scene.to_string()), body.to_string(), false),
-                    None => continue,
+                    Some((scene, body)) => (Some(scene.to_string()), body.to_string(), Owner::Body),
+                    None => (Some(name.clone()), String::new(), Owner::Shared),
                 },
             }
         } else {
             continue;
         };
 
-        /* The model that was animated with it. */
-        let stem = if by_girl {
-            owner.clone()
-        } else {
-            let wanted = format!("{}:{}", crate::layout::GAME_NAMESPACE, owner);
+        /* The skeletons it is written for: her own, the one it names, or (a file for everyone) the ones the scene is for. */
+        let targets: Vec<(String, String)> = match kind {
+            Owner::Girl => vec![(owner.clone(), owner.clone())],
+            Owner::Body => vec![(owner.clone(), format!("{}:{}", crate::layout::GAME_NAMESPACE, owner))],
+            Owner::Shared => {
+                let listed = scene.as_deref().map(|s| scene_bodies(root, s)).unwrap_or_default();
+                let mut all: Vec<String> = if listed.is_empty() { models.iter().filter_map(|m| id_of(&m.stem)).map(|id| id_path(&id).to_string()).collect() } else { listed };
 
-            match models.iter().find(|m| id_of(&m.stem).as_deref() == Some(wanted.as_str())) {
-                Some(m) => m.stem.clone(),
-                None => {
-                    report.skipped.push(format!("{rel}: no model of the skeleton {owner} to split it with"));
-                    continue;
+                all.sort();
+                all.dedup();
+                all.into_iter().map(|b| (b.clone(), format!("{}:{}", crate::layout::GAME_NAMESPACE, b))).collect()
+            }
+        };
+
+        if targets.is_empty() {
+            report.skipped.push(format!("{rel}: no skeleton to write it for"));
+            continue;
+        }
+
+        let mut produced: Vec<(String, Vec<u8>, Vec<u8>)> = Vec::new();
+        let mut failed = false;
+
+        for (target, wanted) in &targets {
+            /* The model that was animated with it: hers, one of the skeleton named, or (when the skeleton has no girl in this pack) any with the partner rig, which is all that the
+               partner's side and the proof need of it. */
+            let stem = match kind {
+                Owner::Girl => owner.clone(),
+                _ => models.iter().find(|m| id_of(&m.stem).as_deref() == Some(wanted.as_str())).or_else(|| models.first()).map(|m| m.stem.clone()).unwrap_or_default(),
+            };
+            let Some(model) = models.iter().find(|m| m.stem == stem && m.rel.contains("/nude/")).or_else(|| models.iter().find(|m| m.stem == stem)) else {
+                if scene.is_some() {
+                    report.skipped.push(format!("{rel}: {stem} has no model with the partner rig"));
+                }
+
+                failed = true;
+                break;
+            };
+            let host_id = match kind {
+                Owner::Girl => id_of(&stem),
+                _ => Some(wanted.clone()),
+            };
+            let Some(host_id) = host_id else {
+                report.skipped.push(format!("{rel}: no skeleton id for {stem}"));
+                failed = true;
+                break;
+            };
+            let done = match scene_split::split_file(&bytes, &model.model, &host_id) {
+                Ok(d) => d,
+                Err(e) => {
+                    report.skipped.push(format!("{rel}: {e}"));
+                    failed = true;
+                    break;
+                }
+            };
+            let (Ok(host_clips), Ok(partner_clips)) = (strut_anim::read(&done.host), strut_anim::read(&done.partner)) else {
+                report.skipped.push(format!("{rel}: the split files did not read back"));
+                failed = true;
+                break;
+            };
+            let proof = scene_split::prove(&model.model, &clips, &host_clips, &partner_clips, 1e-4);
+
+            if let Some(first) = proof.mismatches.first() {
+                report.skipped.push(format!("{rel}: converting it would move {} bones (first: {} in {} at tick {}), so it was left as it is", proof.mismatches.len(), first.bone, first.clip, first.tick));
+                failed = true;
+                break;
+            }
+
+            if produced.is_empty() {
+                for bone in &done.dropped {
+                    *dropped.entry(bone.clone()).or_default() += 1;
                 }
             }
-        };
-        let Some(model) = models.iter().find(|m| m.stem == stem && m.rel.contains("/nude/")).or_else(|| models.iter().find(|m| m.stem == stem)) else {
-            if scene.is_some() {
-                report.skipped.push(format!("{rel}: {stem} has no model with the partner rig"));
+
+            for (bone, by) in proof.approximate {
+                let worst = approximate.entry(bone).or_insert(0.0);
+
+                *worst = worst.max(by);
             }
 
-            continue;
-        };
-        let Some(host_id) = id_of(&stem) else {
-            report.skipped.push(format!("{rel}: no skeleton id for {stem}"));
-            continue;
-        };
-        let done = match scene_split::split_file(&bytes, &model.model, &host_id) {
-            Ok(d) => d,
-            Err(e) => {
-                report.skipped.push(format!("{rel}: {e}"));
-                continue;
-            }
-        };
-        let (Ok(host_clips), Ok(partner_clips)) = (strut_anim::read(&done.host), strut_anim::read(&done.partner)) else {
-            report.skipped.push(format!("{rel}: the split files did not read back"));
-            continue;
-        };
-        let proof = scene_split::prove(&model.model, &clips, &host_clips, &partner_clips, 1e-4);
-
-        if let Some(first) = proof.mismatches.first() {
-            report.skipped.push(format!("{rel}: converting it would move {} bones (first: {} in {} at tick {}), so it was left as it is", proof.mismatches.len(), first.bone, first.clip, first.tick));
-            continue;
+            produced.push((target.clone(), done.host, done.partner));
         }
 
-        for bone in &done.dropped {
-            *dropped.entry(bone.clone()).or_default() += 1;
-        }
-
-        for (bone, by) in proof.approximate {
-            let worst = approximate.entry(bone).or_insert(0.0);
-
-            *worst = worst.max(by);
+        if failed {
+            continue;
         }
 
         match scene {
             None => {
                 /* A base animation keeps the girl's half only: nobody plays the partner there. */
-                writes.insert(rel.clone(), done.host);
+                if let Some((_, host, _)) = produced.into_iter().next() {
+                    writes.insert(rel.clone(), host);
+                }
             }
             Some(scene) => {
-                let host_rel = if by_girl { format!("{base}/animations/scenes/{scene}/host/owners/{owner}.strutanim") } else { format!("{base}/animations/scenes/{scene}/host/skeletons/{}.strutanim", id_path(&host_id)) };
-                let entry = scenes.entry(scene.clone()).or_default();
+                for (target, host, partner) in produced {
+                    let by_girl = kind == Owner::Girl;
+                    let host_id = if by_girl { id_of(&target).unwrap_or_default() } else { format!("{}:{}", crate::layout::GAME_NAMESPACE, target) };
+                    let host_rel = if by_girl { format!("{base}/animations/scenes/{scene}/host/owners/{target}.strutanim") } else { format!("{base}/animations/scenes/{scene}/host/skeletons/{}.strutanim", id_path(&host_id)) };
+                    let entry = scenes.entry(scene.clone()).or_default();
 
-                entry.hosts.insert(host_id.clone());
-                entry.partners.push((owner.clone(), by_girl, shared_id.clone(), done.partner, clips.clone()));
-                writes.insert(host_rel, done.host);
+                    entry.hosts.insert(host_id);
+                    entry.partners.push((target.clone(), by_girl, shared_id.clone(), partner, clips.clone()));
+                    writes.insert(host_rel, host);
+                }
+
                 deletes.push(rel.clone());
             }
         }
@@ -584,5 +538,85 @@ mod tests {
         assert!(undone > 0);
         assert_eq!(snapshot(&copy), before, "undo did not restore the pack");
         let _ = std::fs::remove_dir_all(&copy);
+    }
+
+    /// Ports the base mod's own girls (the game's resources, which are laid out as `assets/` and `data/` rather than as a pack) to the new system: the resources are staged as a
+    /// pack, updated, and every file that changed is copied back. Run with `PH_RESOURCES=<path to src/main/resources> PH_WRITE=1 cargo test -p pc_core -- --ignored port_base_mod --nocapture`;
+    /// without `PH_WRITE` it only says what it would do.
+    #[test]
+    #[ignore]
+    fn port_base_mod() {
+        let resources = std::path::PathBuf::from(std::env::var("PH_RESOURCES").expect("PH_RESOURCES"));
+        let stage = std::env::temp_dir().join("pc-port-base-mod");
+        let _ = std::fs::remove_dir_all(&stage);
+
+        let pack = stage.join("data/pleasurehorizons");
+
+        copy_dir(&resources.join("assets/pleasurehorizons/strut"), &pack.join("asset_sync/strut"));
+        copy_dir(&resources.join("data/pleasurehorizons/girls"), &pack.join("girls"));
+        copy_dir(&resources.join("data/pleasurehorizons/scenes"), &pack.join("scenes"));
+        std::fs::write(stage.join("pack.mcmeta"), "{\"pack\":{\"pack_format\":48,\"description\":\"staged\"}}").unwrap();
+
+        let before = snapshot(&stage);
+        let report = crate::migrate::update(&stage, true).unwrap();
+
+        println!("scenes {} written {} removed {} stripped {}", report.scenes, report.files_written, report.files_removed, report.models_stripped);
+        println!("skipped {:#?}", report.skipped);
+        println!("dropped {:?}", report.dropped_bones);
+        println!("approximate {:?}", report.approximate);
+        println!("findings {:#?}", report.findings);
+
+        let after = snapshot(&stage);
+
+        /* Every model that was stripped keeps what it had: each remaining bone is where it was, its meshes and armatures are as they were and hang off the same bones. */
+        for (rel, bytes) in &after {
+            let Some(old) = before.get(rel).filter(|o| *o != bytes && rel.ends_with(".strutmodel")) else { continue };
+            let (a, b) = (strut_model::read(old).unwrap(), strut_model::read(bytes).unwrap());
+            let (wa, wb) = (crate::pose::world_matrices(&a, None, 0.0), crate::pose::world_matrices(&b, None, 0.0));
+
+            for bone in &b.group_bones {
+                assert!(crate::pose::distance(&wa[&bone.name], &wb[&bone.name]) < 1e-9, "{rel}: {} moved", bone.name);
+            }
+
+            assert_eq!(a.meshes.len(), b.meshes.len(), "{rel}");
+            assert_eq!(a.cubes.len() - scene_split::subtree(&a, PARTNER_ROOT).iter().map(|i| a.group_bones[*i].elements.len()).sum::<usize>(), b.cubes.len(), "{rel}");
+
+            for (x, y) in a.armatures.iter().zip(&b.armatures) {
+                let name = |m: &Model, i: i16| (i >= 0).then(|| m.group_bones[i as usize].name.clone());
+
+                assert_eq!(name(&a, x.parent_group_bone), name(&b, y.parent_group_bone), "{rel}: an armature moved to another bone");
+            }
+        }
+
+        let ours = |rel: &str| rel.strip_prefix("data/pleasurehorizons/asset_sync/strut/").map(|r| resources.join("assets/pleasurehorizons/strut").join(r));
+        let (mut wrote, mut removed) = (0, 0);
+
+        for (rel, bytes) in &after {
+            if before.get(rel) != Some(bytes) {
+                if let Some(target) = ours(rel) {
+                    wrote += 1;
+
+                    if std::env::var("PH_WRITE").is_ok() {
+                        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+                        std::fs::write(&target, bytes).unwrap();
+                    }
+                }
+            }
+        }
+
+        for rel in before.keys() {
+            if !after.contains_key(rel) {
+                if let Some(target) = ours(rel) {
+                    removed += 1;
+
+                    if std::env::var("PH_WRITE").is_ok() {
+                        let _ = std::fs::remove_file(&target);
+                    }
+                }
+            }
+        }
+
+        println!("would change {wrote} files and remove {removed} (written: {})", std::env::var("PH_WRITE").is_ok());
+        let _ = std::fs::remove_dir_all(&stage);
     }
 }
