@@ -173,7 +173,7 @@ fn say(message: &str) {
     *INSTALL.lock().unwrap() = message.to_string();
 }
 
-fn curl(args: &[&str]) -> Result<Vec<u8>, String> {
+pub(crate) fn curl(args: &[&str]) -> Result<Vec<u8>, String> {
     let out = Command::new("curl.exe").args(args).creation_flags(NO_WINDOW).output().map_err(|e| format!("curl could not run: {e}"))?;
 
     if !out.status.success() {

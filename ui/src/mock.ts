@@ -181,6 +181,7 @@ export async function mock(command: string, args: Args = {}): Promise<unknown> {
     case 'old_pack_look': return delay({ id: args.girl, models: ['nude', 'dressed'], texture: true, clips: ['idle', 'walk', 'doggy_intro', 'doggy_slow', 'doggy_fast', 'doggy_cum', 'ride_slow', 'ride_fast', 'wave'], scenes: [{ name: 'Doggy', scene_type: 'on_bed', parts: { intro: ['doggy_intro'], slow: ['doggy_slow'], fast: ['doggy_fast'], cum: ['doggy_cum'] } }, { name: 'Ride', scene_type: 'on_player', parts: { slow: ['ride_slow'], fast: ['ride_fast'] } }, { name: 'Wave', scene_type: 'stationary', parts: { loop: ['wave'] } }], scenes_from: 'names', files_layout: false, bones: ['root', 'body', 'head', 'boobL', 'boobR'] });
     case 'skeleton_plan': return { assignments: [], groups: [{ id: 'pleasurehorizons:jenny', models: ['jenny', 'amber'], animations: 4 }], unreadable: [] };
     case 'skeleton_apply': return { written: 6, already: 0, failed: [] };
+    case 'check_app_update': return { current: '1.1.0', latest: 'v1.1.0', newer: false, url: '', notes: '', asset: null, asset_name: null };
     case 'register_actors': return { base: 15, pack: 2, folders: [], announced: false };
     case 'migration_status': return { format: 2, current: 2, needed: false, reason: null, steps: [], newer: false };
     case 'split_scenes': return { applied: !!args.apply, stamp: args.apply ? '1' : null, scenes: 3, files_written: 12, files_removed: 6, models_stripped: 2, dropped_bones: [], approximate: [], skipped: [], findings: [] };

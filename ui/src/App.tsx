@@ -3,6 +3,7 @@ import { api, pickFolder } from './api';
 import { Home } from './Home';
 import { NewProject } from './NewProject';
 import { Toaster, messageOf, notify } from './notify';
+import { UpdateBanner } from './UpdateBanner';
 import type { Opened } from './types';
 import { Workspace } from './Workspace';
 
@@ -36,6 +37,7 @@ export function App() {
       {screen.name === 'new' && <NewProject onCancel={() => setScreen({ name: 'home' })} onCreated={opened => setScreen({ name: 'workspace', opened })} />}
       {screen.name === 'workspace' && <Workspace key={screen.opened.root} opened={screen.opened} onHome={home} />}
       <Toaster />
+      <UpdateBanner />
     </>
   );
 }

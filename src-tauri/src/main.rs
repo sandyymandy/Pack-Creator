@@ -5,6 +5,7 @@
 //! The page never names a place on disk after the project is opened: it names files relative to the project, and `pc_core` refuses anything that leaves it.
 
 mod actors;
+mod app_update;
 mod blockbench;
 mod clipboard;
 mod examples;
@@ -1215,6 +1216,24 @@ async fn update_toolkit() -> Reply<String> {
     tauri::async_runtime::spawn_blocking(blockbench::update_plugin).await.map_err(text)?
 }
 
+/// Looks on GitHub for a newer Pack Creator.
+#[tauri::command]
+async fn check_app_update() -> Reply<app_update::Update> {
+    tauri::async_runtime::spawn_blocking(app_update::check).await.map_err(text)?
+}
+
+/// Downloads the update's file into the Downloads folder and shows it in Explorer.
+#[tauri::command]
+async fn download_app_update(url: String, name: String) -> Reply<String> {
+    tauri::async_runtime::spawn_blocking(move || app_update::download(&url, &name)).await.map_err(text)?
+}
+
+/// Opens a page of the Pack Creator's own GitHub in the browser.
+#[tauri::command(async)]
+fn open_release_page(url: String) -> Reply<()> {
+    app_update::open_page(&url)
+}
+
 /// Writes the actor presets the Strut Toolkit's animation workspace offers: the base mod's characters and the male, and the characters of the open pack (all of them when `girls`
 /// is empty, otherwise the ones named; none when `with_pack` is false). A Blockbench that is open is told at once.
 #[tauri::command]
@@ -1751,6 +1770,9 @@ fn main() {
             prepare_blockbench,
             update_toolkit,
             register_actors,
+            check_app_update,
+            download_app_update,
+            open_release_page,
             open_in_blockbench,
             cue_names,
             old_pack_girls,

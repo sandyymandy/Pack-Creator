@@ -334,3 +334,4 @@ export interface SkeletonWritten { written: number; already: number; failed: str
 export interface SplitReport { applied: boolean; stamp: string | null; scenes: number; files_written: number; files_removed: number; models_stripped: number; dropped_bones: [string, number][]; approximate: [string, number][]; skipped: string[]; findings: string[] }
 export interface MigrationStatus { format: number; current: number; needed: boolean; reason: string | null; steps: { to: number; title: string; detail: string }[]; newer: boolean }
 export interface ActorSummary { base: number; pack: number; folders: string[]; announced: boolean }
+export interface AppUpdate { current: string; latest: string; newer: boolean; url: string; notes: string; asset: string | null; asset_name: string | null }

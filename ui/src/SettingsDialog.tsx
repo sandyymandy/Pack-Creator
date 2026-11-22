@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Dialog } from './Dialogs';
+import { checkForUpdate } from './UpdateBanner';
+import { messageOf, notify } from './notify';
+import { api } from './api';
 import { DEFAULTS, getSettings, keyName, setSettings, type Settings } from './settings';
 
 /** The Pack Creator's settings: how files are saved, how the editor looks, and how the scene simulator is played. Every change applies at once. */
@@ -36,6 +39,16 @@ export function SettingsDialog({ onClose, onResetLayout }: { onClose: () => void
 
   return (
     <Dialog title="Settings" onClose={onClose}>
+      <h4 class="set-head">Updates</h4>
+      <div class="set-row">
+        <label>The Pack Creator looks for a newer version on GitHub when it starts.</label>
+        <button class="btn small" onClick={() => void checkForUpdate().then(found => {
+          if (!found.newer) { notify(`You have the newest version (${found.current}).`, true); return; }
+          notify(`${found.latest} is out (this is ${found.current}). Opening its page.`, true);
+          void api.openReleasePage(found.url).catch(error => notify(messageOf(error)));
+        }).catch(error => notify(messageOf(error)))}>Check now</button>
+      </div>
+
       <h4 class="set-head">Window</h4>
       <div class="set-row"><label>Zoom the whole window ({Math.round(settings.uiZoom * 100)}%; also Ctrl + and Ctrl - , Ctrl 0 resets)</label><input type="range" min={0.7} max={2} step={0.05} value={settings.uiZoom} onInput={e => change({ uiZoom: Number((e.target as HTMLInputElement).value) })} /></div>
 
