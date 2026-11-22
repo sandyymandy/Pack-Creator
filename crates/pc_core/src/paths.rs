@@ -57,6 +57,13 @@ pub fn physics_of(model: &str) -> String {
 
 /// Moves one old path to where format 3 keeps it, or None when the path is not one of the moved ones. `rel` is relative to the pack, `data/<ns>/asset_sync/strut/...`.
 pub fn moved(rel: &str) -> Option<String> {
+    /* What Blockbench's Strut Scenes writes: `assets/<namespace>/strut/...`, which a pack keeps under `data/<namespace>/asset_sync/`. */
+    if let Some(rest) = rel.strip_prefix("assets/") {
+        let (namespace, tail) = rest.split_once('/')?;
+
+        return tail.starts_with("strut/").then(|| format!("data/{namespace}/asset_sync/{tail}"));
+    }
+
     let at = rel.find("/asset_sync/strut/")? + "/asset_sync/strut/".len();
     let (head, tail) = rel.split_at(at);
     let parts: Vec<&str> = tail.split('/').collect();
@@ -111,6 +118,9 @@ mod tests {
         assert_eq!(at("animations/base/owners/lucy.strutanim").as_deref(), Some("animations/base/characters/lucy.strutanim"));
         assert_eq!(at("event_bindings/owners/lucy.json").as_deref(), Some("event_bindings/characters/lucy.json"));
         assert_eq!(at("animations/base/skeletons/jenny.strutanim"), None);
+        assert_eq!(moved("assets/mymod/strut/scenes/tango.strutscene").as_deref(), Some("data/mymod/asset_sync/strut/scenes/tango.strutscene"));
+        assert_eq!(moved("assets/mymod/strut/animations/scenes/tango/host/skeletons/x.strutanim").as_deref(), Some("data/mymod/asset_sync/strut/animations/scenes/tango/host/skeletons/x.strutanim"));
+        assert_eq!(moved("assets/mymod/textures/x.png"), None);
         assert_eq!(at("models/armour/lucy/chest.strutmodel"), None);
         assert_eq!(at("animations/scenes/doggy/host/characters/lucy.strutanim"), None);
         assert_eq!(at("models/entities/girls/nude/lucy.strutmodel"), None);

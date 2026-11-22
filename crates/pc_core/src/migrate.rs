@@ -26,7 +26,11 @@ pub struct Step {
     pub detail: &'static str,
 }
 
-const STEPS: [Step; 4] = [Step {
+const STEPS: [Step; 5] = [Step {
+    to: 0,
+    title: "Files exported from Blockbench",
+    detail: "Moves what Blockbench's Strut Scenes wrote under assets/<namespace>/strut/ into data/<namespace>/asset_sync/strut/, where the game reads it.",
+}, Step {
     to: 5,
     title: "Characters, not owners",
     detail: "Renames the folders of one character's own files: owners becomes characters (strut/animations/<set>/characters, strut/event_bindings/characters).",
@@ -145,11 +149,7 @@ fn rename_legacy(root: &Path) -> Result<usize> {
 
 /// Whether the pack still has what format 4 layers: a girl's whole bindings table, her whole base animation file, or a layout whose clips have no phase.
 fn needs_layers(root: &Path) -> bool {
-    crate::check::walk(root).iter().any(|rel| {
-        rel.contains("/strut/event_bindings/girls/")
-            || rel.contains("/strut/animations/entities/girls/base.")
-            || (rel.contains("/strut/scenes/") && rel.ends_with(".strutscene") && std::fs::read_to_string(root.join(rel)).map_or(false, |t| t.contains("\"clips\"") && !t.contains("\"phase\"")))
-    })
+    crate::check::walk(root).iter().any(|rel| rel.contains("/strut/event_bindings/girls/") || rel.contains("/strut/animations/entities/girls/base.")) || !crate::layers::plan_layouts(root).writes.is_empty()
 }
 
 /// The files that are still where format 2 kept them.
@@ -191,6 +191,8 @@ fn move_files(root: &Path) -> Result<(usize, Vec<String>)> {
     }
 
     prune(&root.join("data"));
+    prune(&root.join("assets"));
+    let _ = std::fs::remove_dir(root.join("assets"));
     Ok((moved, left))
 }
 
@@ -198,10 +200,11 @@ pub fn status(root: &Path, meta: &ProjectMeta) -> Status {
     let rig = has_old_male(root);
     let renames = !legacy_files(root).is_empty();
     let to_move = files_to_move(root);
-    let moves = to_move.iter().any(|(from, _)| !from.contains("/owners/"));
+    let exports = to_move.iter().any(|(from, _)| from.starts_with("assets/"));
+    let moves = to_move.iter().any(|(from, _)| !from.contains("/owners/") && !from.starts_with("assets/"));
     let owners = to_move.iter().any(|(from, _)| from.contains("/owners/"));
     let layers = needs_layers(root);
-    let old_rig = rig || renames || moves || layers || owners;
+    let old_rig = rig || renames || moves || layers || owners || exports;
     let needed = meta.format < CURRENT || old_rig;
 
     Status {
@@ -210,7 +213,7 @@ pub fn status(root: &Path, meta: &ProjectMeta) -> Status {
         needed,
         reason: (old_rig && meta.format >= CURRENT).then(|| "Some files are still in the form of an older format.".to_string()),
         /* Only the steps that have something to do in this pack are listed. */
-        steps: STEPS.iter().filter(|s| match s.to { 5 => owners, 4 => layers, 3 => moves, _ => rig || renames }).cloned().collect(),
+        steps: STEPS.iter().filter(|s| match s.to { 5 => owners, 4 => layers, 3 => moves, 0 => exports, _ => rig || renames }).cloned().collect(),
         newer: meta.format > CURRENT,
     }
 }
@@ -457,5 +460,27 @@ mod tests {
         assert!(tables > 3 && base_files > 3, "{tables} tables, {base_files} base files");
         assert!(!status(&copy, &project::open(&copy).unwrap()).needed);
         let _ = std::fs::remove_dir_all(&copy);
+    }
+
+    #[test]
+    fn what_blockbench_exports_under_assets_is_moved_to_asset_sync() {
+        let dir = std::env::temp_dir().join(format!("pc-export-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("assets/mymod/strut/scenes")).unwrap();
+        std::fs::write(dir.join("pack.mcmeta"), "{\"pack\":{\"pack_format\":48,\"description\":\"x\"}}").unwrap();
+        std::fs::write(dir.join("assets/mymod/strut/scenes/tango.strutscene"), "{\"roles\":{},\"clips\":{}}").unwrap();
+
+        let meta = project::open(&dir).unwrap();
+        let before = status(&dir, &meta);
+
+        assert!(before.needed);
+        assert!(before.steps.iter().any(|s| s.title.contains("exported from Blockbench")));
+
+        update(&dir, true).unwrap();
+
+        assert!(dir.join("data/mymod/asset_sync/strut/scenes/tango.strutscene").is_file());
+        assert!(!dir.join("assets").exists(), "the emptied assets folder is removed");
+        assert!(!status(&dir, &project::open(&dir).unwrap()).needed);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -18,7 +18,7 @@ Open a pack made before format 5 and the **Update this pack** window opens by it
 - the girls' models, base animations and physics files move to the folders the game reads (`strut/models/entities/girls/...`, `strut/animations/entities/...`), and blocks and items to `blocks` and `items` (format 3). **Undo** does not move these back;
 - the folders of one character's own files are called `characters` (they were `owners`);
 - the layered files (format 4): event bindings and everyday animations by skeleton and character, and the phase and variant of each clip in the layouts;
-- the pack's format number goes to 5.
+- the pack's format number goes to 5. The formats are listed in [pack formats](doc:formats).
 
 It is done in place, and **Undo** puts every file back as it was. A scene is converted only when the Pack Creator has checked that every bone is posed exactly as before. A file that fails that check is left as it was, and then no model is stripped, so the old scenes keep working.
 

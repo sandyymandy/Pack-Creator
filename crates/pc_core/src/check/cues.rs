@@ -128,7 +128,7 @@ pub fn bindings(sink: &mut Sink, root: &Node, reference: &Reference, facts: &Pac
 pub fn old_keyframe_events(sink: &mut Sink, root: &Node) {
     sink.warn(
         "keyframe-events-unused",
-        "The game no longer reads keyframe_events files. Put each cue's sounds and chat lines in the girl's event bindings (strut/event_bindings/girls/<girl>.json): \"sounds\", \"random_sounds\" and \"pleasurehorizons:messages\" (the lines themselves).",
+        "The game no longer reads keyframe_events files. Put each cue's sounds and chat lines in the girl's event bindings (strut/event_bindings/characters/<girl>.json): \"sounds\", \"random_sounds\" and \"pleasurehorizons:messages\" (the lines themselves).",
         root.start,
         root.start + 1,
     );

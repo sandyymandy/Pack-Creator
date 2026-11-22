@@ -1551,7 +1551,7 @@ fn import_old_pack(app: State<App>, pack: String, jobs: Vec<GirlJob>, liquid: bo
 
     /* The last pass: what was brought in carries the old male rig in the girls' models and scene files, so the pack is converted to the new scene system (one model per
        participant), in place. The male is the base mod's own, so the old rig is not kept. */
-    match pc_core::pack_split::split_pack(&root, true) {
+    match pc_core::migrate::update(&root, true) {
         Ok(split) => {
             use pc_core::import::Level;
 

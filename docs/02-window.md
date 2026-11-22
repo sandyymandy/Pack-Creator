@@ -16,13 +16,20 @@ The icon bar runs along the top of a project. Hover a button for its name. From 
 | Find | Find and replace across every file (Ctrl+Shift+F) |
 | Play | **Try in a world**: copies the pack into a world's `datapacks` folder |
 | Export | Writes the pack as a zip to share |
+| Two people | **Who each scene is for**: one girl, or every girl on a skeleton (for packs still in the single-file layout, [formats](doc:formats)) |
+| Joints | **Skeleton ids**: which rig each model and animation file is made for ([scene animations](doc:animations)) |
+| Split arrows | **Update the pack**: brings an older pack to the current format, in place and with an Undo ([formats](doc:formats)). It opens by itself when you open an older pack |
 | Import | Brings in an old girl from her resource pack or profile ([importing](doc:tools)) |
-| Cube | Blockbench: install it, or open it with the Strut Toolkit |
+| Cube | Blockbench: install it, open it with the Strut Toolkit, and register the characters Strut Scenes offers ([Blockbench](doc:blockbench)) |
 | Log | The game log: what the game said about this pack |
 | Book | These docs (F1) |
 | Question mark | Replays the tour |
-| Sliders | Settings |
+| Sliders | Settings: saving, the editor, the simulator's keys, the window zoom, and **Updates** |
 | Panel | Moves the file tree to the other side |
+
+## Updates
+
+When a newer Pack Creator is on GitHub, a note appears at the bottom right with what is new. **Download** saves the new version into your Downloads folder and shows it in Explorer; close the Pack Creator and run it. **Skip this version** stops the note for that version, and **Later** hides it until next time. The check is made when the program starts, at most twice a day, and **Check now** in Settings makes it at once.
 
 ## The file tree
 

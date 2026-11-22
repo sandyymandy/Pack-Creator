@@ -857,9 +857,9 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
         <span class="bar-sep" />
         <IconButton tour="play" icon="play" tip="Try in a world: copy the pack into a world to test it in the game" onClick={() => void tryInWorld()} />
         <IconButton tour="export" icon="export" tip="Export the pack as a zip to share" onClick={() => void exportZip()} />
-        <IconButton icon="scope" tip="Who each scene is for: one girl, or every girl on a skeleton" onClick={() => setDialog({ type: 'scope' })} />
-        <IconButton icon="rig" tip="Skeleton ids: which rig each model and animation file is made for" onClick={() => setDialog({ type: 'skeletons' })} />
-        <IconButton icon="split" tip="Update the pack: one model per participant, in place (can be undone)" onClick={() => setDialog({ type: 'split' })} />
+        <IconButton tour="scope" icon="scope" tip="Who each scene is for: one girl, or every girl on a skeleton" onClick={() => setDialog({ type: 'scope' })} />
+        <IconButton tour="rig" icon="rig" tip="Skeleton ids: which rig each model and animation file is made for" onClick={() => setDialog({ type: 'skeletons' })} />
+        <IconButton tour="update" icon="split" tip="Update the pack: one model per participant, in place (can be undone)" onClick={() => setDialog({ type: 'split' })} />
         <IconButton tour="import" icon="import" tip="Import an old girl from her resource pack or profile" onClick={() => setDialog({ type: 'import' })} />
         <span class="bar-sep" />
         <IconButton tour="blockbench" icon="cube" tip="Blockbench: install it or open it with the Strut Toolkit" onClick={() => setDialog({ type: 'blockbench' })} />
@@ -867,7 +867,7 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
         <IconButton tour="docs" icon="docs" tip="Documentation: how girls, scenes, traits, dialogue and assets work (F1)" onClick={() => setDialog({ type: 'docs' })} />
         <IconButton tour="tour" icon="help" tip="Take the tour: a short walk round this window" onClick={() => setTouring(true)} />
         <span class="bar-sep" />
-        <IconButton icon="settings" tip="Settings" onClick={() => setDialog({ type: 'settings' })} />
+        <IconButton tour="settings" icon="settings" tip="Settings" onClick={() => setDialog({ type: 'settings' })} />
         <IconButton icon={side === 'left' ? 'sideLeft' : 'sideRight'} tip={`File tree: on the ${side}. Click to move it to the ${side === 'left' ? 'right' : 'left'}`} onClick={setSideAndRemember} />
       </div>
 

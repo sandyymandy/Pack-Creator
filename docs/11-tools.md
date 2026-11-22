@@ -28,6 +28,8 @@ On a scene file, **Simulate** opens a tab that plays the scene as the game does:
 3. She goes to a bed and lies down, and waits until you click her.
 4. The game's own planner, ported to the simulator, chooses her clips from the cues and your thrust key, with a progress bar, the rig drawn with a player skin, and every cue listed with the sounds that play and the chat lines it says.
 
+Both bodies are drawn: the girl on her own model and **the male** on the base mod's male model, each playing the clips of its own role ([the male](doc:male)). Click the scene rig to hide or show him.
+
 The **Cum** key ends the scene once the bar is full. The pace game is played too, so you can tune a scene's `minigame` block and feel the change at once. The keys and sound volume are in Settings.
 
 The simulator offers only the scenes that fit a skeleton and the girls they fit. The game's own girls and scenes are included as examples, so you can try any scene on a girl of yours.
@@ -46,7 +48,7 @@ The simulator offers only the scenes that fit a skeleton and the girls they fit.
 - **Scene types.** Each scene in the review has a **type**: on the player, with the player and one animation (it needs the player but plays only its loop clip, once or a number of times), on a bed, standing with the player in contact, standing alone with an intro, standing alone, while she is downed, or while the player is downed. The type decides which parts are offered (a bed scene has a lie-down and an idle; a solo scene has a loop, and a solo intro for the one with an intro; the others have intro, slow, fast and climax). It is guessed from the clip names (a loop with no thrusting is a solo scene, a lie-down makes a bed scene, "downed" in the name makes a downed one) or read from her profile, and written to the scene file.
 - **Girls the project already has are left out.** When a pack's girls are listed, any whose girl file is already in the project are marked "already in the project", cannot be ticked, and are skipped by Select all, the body type guess and the review.
 - **Removing animations from a file.** An animation file opened in the viewer has an **Animations...** button: it lists every clip with its length and cues, with a search box and tick boxes, and **Remove** takes the ticked ones out (a file keeps at least one). A copy of the file as it was is kept in the project's `.packcreator/backups` folder. The other clips are copied byte for byte.
-- **Who a scene is for.** The layers button in the top bar (or **Who this scene is for...** on a scene file in the tree) lists every scene with its animation files and whose they are: one girl's (`scene-girl`), a skeleton's (`scene.body`) or everyone's. **Make skeleton-wide** moves her file to `scene.body.strutanim` and takes her name out of the scene file's `supported_girls` (adding her body type to `body_types`); **Make hers only** does the opposite (moving the skeleton file to `scene-girl.strutanim`, or copying it when "Keep the skeleton file" is ticked) and names her in the scene file. **Make all skeleton-wide** does every one-girl scene, saying which it left alone (a file already in the way is never overwritten). The scene file's earlier text is in its History.
+- **Who a scene is for** (for packs still in the single-file layout; a pack in the current layout has role folders instead, [scene animations](doc:animations)). The two-people button in the top bar (or **Who this scene is for...** on a scene file in the tree) lists every scene with its animation files and whose they are: one girl's (`scene-girl`), a skeleton's (`scene.body`) or everyone's. **Make skeleton-wide** moves her file to `scene.body.strutanim` and takes her name out of the scene file's `supported_girls` (adding her body type to `body_types`); **Make hers only** does the opposite (moving the skeleton file to `scene-girl.strutanim`, or copying it when "Keep the skeleton file" is ticked) and names her in the scene file. **Make all skeleton-wide** does every one-girl scene, saying which it left alone (a file already in the way is never overwritten). The scene file's earlier text is in its History.
 - A resource pack made for the **old mod** (its files are under `assets/sexmod/`: one model in `geo/<name>/`, one animation file, a folder of sounds for each cue) is recognised and rewritten as it opens. The single model is used for both her nude and her dressed model, scenes are found from clip names ending `_intro`, `_slow`, `_fast` and `_cum`, each sound folder becomes a sound her cues play, and her name is read from the pack's language file. Her scene types, affection and tags are guesses, so open each scene file after importing. A pack with no sounds or language file (just a model, animations and a texture) comes in as a girl named for her model; rename her afterwards.
 
 The report lists everything it made and anything it could not convert. Read it before deleting the original.
@@ -57,7 +59,15 @@ The **Convert a model or animation file** tab of the same dialog takes a single 
 
 ## Blockbench
 
-The **Blockbench** button installs Blockbench and the Strut Toolkit for you and keeps a profile of its own, so it does not touch your normal Blockbench. Use it to make models and animations. See [assets](doc:assets) and [animations](doc:animations).
+The **Blockbench** button installs Blockbench and the Strut Toolkit for you and links to your own Blockbench. Use it to make models and animations, and, with **Strut Scenes**, whole scenes with several characters on one timeline. The Pack Creator gives Blockbench the game's characters (the base girls, the male and your pack's girls) and its kinds of scene. See [Blockbench and Strut Scenes](doc:blockbench), [assets](doc:assets) and [animations](doc:animations).
+
+## Skeleton ids
+
+The **Skeleton ids** button (joints) lists every model and animation file with the skeleton id it should carry, grouped by id. Girls on one id share a rig. Type another id beside a girl whose model is built differently, then **Write ids**: a copy of each file as it was is kept, and the file is checked to read back with its id ([scene animations](doc:animations)).
+
+## Update the pack
+
+The **Update the pack** button opens the window that brings a pack to the current format ([pack formats](doc:formats)): it lists the steps that apply to this pack, what it would write or move, and has an **Undo** for the conversion.
 
 ## History
 

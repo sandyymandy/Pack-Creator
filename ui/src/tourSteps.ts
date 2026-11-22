@@ -29,6 +29,11 @@ export function homeSteps(openDocs: (page: string) => void): TourStep[] {
       action: { label: 'Open "Your first pack"', run: () => openDocs('first-pack') }
     },
     {
+      title: 'Updates and older packs',
+      text: 'The Pack Creator looks on GitHub for a newer version when it starts and tells you at the bottom right, with what is new and a download. A pack made in an older layout opens fine: a window offers to bring it up to date, shows what it will do first, and can undo it.',
+      action: { label: 'Open "Pack formats"', run: () => openDocs('formats') }
+    },
+    {
       title: 'Ready',
       text: 'Make a project or open one. A second, shorter tour will walk you round the workspace the first time a project opens.'
     }
@@ -41,6 +46,11 @@ export function workspaceSteps(openDocs: (page: string) => void): TourStep[] {
     {
       title: 'Your workspace',
       text: 'This is where a pack is built. The tour touches each part in turn. Nothing you do here is lost: everything saves as you type, and every file keeps its earlier versions.'
+    },
+    {
+      title: 'How a scene fits together',
+      text: 'A scene is played by two bodies at once: the girl on her own model, and the male on the base mod\'s male model. Each plays its own clips from its own file, and a small layout file says who may fill which role. Models and files carry a skeleton id so the game knows which rig they are for. You will meet these in the buttons below; the docs explain each one.',
+      action: { label: 'Open "The male"', run: () => openDocs('male') }
     },
     {
       target: '.sidebar',
@@ -83,14 +93,32 @@ export function workspaceSteps(openDocs: (page: string) => void): TourStep[] {
       text: 'Writes the pack as a zip. Others drop it into a world\'s datapacks folder, and the game sends the models and sounds to players when they join.'
     },
     {
+      target: '[data-tour="scope"]',
+      title: 'Who each scene is for',
+      text: 'Lists every scene with the animation files it has and whose they are: one girl\'s, or every girl on a skeleton. For packs still in the single-file layout it can make a file skeleton-wide or hers only.'
+    },
+    {
+      target: '[data-tour="rig"]',
+      title: 'Skeleton ids',
+      text: 'Every model, and every animation made for it, carries the id of its rig, such as pleasurehorizons:jenny. This groups your girls by id and writes the ids in. Give a girl whose model is built differently an id of her own.',
+      action: { label: 'Open "Scene animations"', run: () => openDocs('animations') }
+    },
+    {
+      target: '[data-tour="update"]',
+      title: 'Update the pack',
+      text: 'Brings an older pack to the current layout, in place: it shows what it will do before it does anything, converts only what it has checked is posed exactly as before, and can undo the conversion. It opens by itself when you open an older pack.',
+      action: { label: 'Open "Pack formats"', run: () => openDocs('formats') }
+    },
+    {
       target: '[data-tour="import"]',
       title: 'Bring in an old girl',
-      text: 'Converts a girl from an older resource pack or profile into a pack here, and reports what it changed.'
+      text: 'Converts a girl from an older resource pack or profile into a pack here, brings her up to the current layout, and reports what it changed.'
     },
     {
       target: '[data-tour="blockbench"]',
-      title: 'Blockbench',
-      text: 'Installs Blockbench with the Strut Toolkit, on a profile of its own, for making models and animations. The viewer\'s Edit in Blockbench button opens the file you are looking at.'
+      title: 'Blockbench and Strut Scenes',
+      text: 'Installs Blockbench with the Strut Toolkit for making models, animations and whole scenes. The viewer\'s Edit in Blockbench opens the file you are looking at. Register actors gives Blockbench the game\'s characters, the male and your own girls, so a scene with several characters is a few clicks.',
+      action: { label: 'Open "Blockbench and Strut Scenes"', run: () => openDocs('blockbench') }
     },
     {
       target: '[data-tour="log"]',
@@ -109,13 +137,18 @@ export function workspaceSteps(openDocs: (page: string) => void): TourStep[] {
       text: 'This button starts the tour again whenever you want it. The home page has one too.'
     },
     {
+      target: '[data-tour="settings"]',
+      title: 'Settings',
+      text: 'How fast files save, the editor\'s look, the scene simulator\'s keys and sound, the zoom of the whole window, and Check now for a newer Pack Creator.'
+    },
+    {
       target: '.statusbar',
       title: 'The status bar',
       text: 'Shows whether everything is saved, how many errors and warnings the pack has, and where your cursor is.'
     },
     {
       title: 'You are set',
-      text: 'Try the walk-through: it takes you from an empty project to a girl in the game.',
+      text: 'Try the walk-through: it takes you from an empty project to a girl in the game. If a problem names a code, the checks page says what it means and what to do.',
       action: { label: 'Open "Your first pack"', run: () => openDocs('first-pack') }
     }
   ];

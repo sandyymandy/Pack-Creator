@@ -205,7 +205,7 @@ pub fn create_girl(app: State<App>, request: NewGirl) -> Reply<CreatedGirl> {
     write(&root, &mut written, &format!("{SYNC}/{}", pc_core::paths::girl_model("nude", &id)), &nude_bytes)?;
     write(&root, &mut written, &format!("{SYNC}/{}", pc_core::paths::girl_model("dressed", &id)), &dressed_bytes)?;
     write(&root, &mut written, &format!("{SYNC}/textures/entities/{id}.png"), &texture_bytes)?;
-    write(&root, &mut written, &format!("{SYNC}/strut/event_bindings/girls/{id}.json"), b"{\n  \"bindings\": {}\n}\n")?;
+    write(&root, &mut written, &format!("{SYNC}/strut/event_bindings/characters/{id}.json"), b"{\n  \"bindings\": {}\n}\n")?;
 
     if request.physics {
         for (kind, model) in [("nude", &nude), ("dressed", &dressed)] {

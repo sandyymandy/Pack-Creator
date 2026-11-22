@@ -6,7 +6,7 @@ Cues are how an animation talks to the rest of the game: the animation says *whe
 
 ## Event bindings
 
-`asset_sync/strut/event_bindings/girls/<girl>.json` says what her cues do:
+`asset_sync/strut/event_bindings/characters/<girl>.json` says what her cues do (in packs made before format 4 it is `girls/<girl>.json`, one whole table per girl; the update turns it into layers):
 
 ```json
 {
@@ -28,6 +28,10 @@ Cues are how an animation talks to the rest of the game: the animation says *whe
 | `pleasurehorizons:player_messages` | The same for lines said as the player |
 
 Because every girl has her own bindings file, two girls can react to the same cue in their own way: the same `moan` marker plays Lucy's voice for Lucy and yours for your girl.
+
+### Layers
+
+What every girl on one skeleton has in exactly the same form can be written once, in `asset_sync/strut/event_bindings/skeletons/<skeleton>.json` (the same shape), and a girl's own file then only holds what she changes: a cue in her file replaces the skeleton's. The update does this for you, and only for bindings that are identical for every girl of the skeleton, so nobody gains or loses a binding.
 
 ## Adding a line
 

@@ -46,6 +46,10 @@ Problems are rechecked when a file is saved, and the whole pack a moment later. 
 | Ctrl+C, X, V | Copy, cut and paste files in the tree |
 | F1 | These docs |
 
+## Pack formats
+
+The way a pack's files are laid out has changed over time. Open an older pack and the **Update this pack** window offers to bring it up to date, in place, showing what it will do first and with an Undo ([pack formats](doc:formats)). A pack made by hand or by an older Pack Creator opens fine either way; the update is for the game to read it.
+
 ## Trying your work
 
 - **Simulate** on a scene file plays the scene the way the game plans it, with the real cues and sounds ([the simulator](doc:tools)).
