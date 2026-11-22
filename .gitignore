@@ -4,3 +4,5 @@
 /src-tauri/gen/
 target-test
 /test_pack/
+
+*.timestamp-*.mjs
