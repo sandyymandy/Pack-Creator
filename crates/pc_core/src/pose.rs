@@ -390,3 +390,42 @@ mod sound_probe {
         for c in crate::strut_anim::read(&std::fs::read(f).unwrap()).unwrap() { for e in c.events { if e.kind != "instruction" { println!("SND {} t={} kind={} payload={:?} auth={}", c.name, e.time, e.kind, e.payload, e.authority); } } }
     }
 }
+
+#[cfg(test)]
+mod male_probe {
+    #[test]
+    #[ignore]
+    fn clips() {
+        let root = std::path::PathBuf::from(r"C:\Users\Sandyy\Documents\Idea Projects\Pleasure Horizons\src\main\resources\assets\pleasurehorizons\strut\animations\scenes");
+        for scene in ["doggy", "cowgirl"] {
+            for role in ["host", "male"] {
+                for kind in ["characters", "skeletons"] {
+                    let d = root.join(scene).join(role).join(kind);
+                    let Ok(rd) = std::fs::read_dir(&d) else { continue };
+                    for e in rd.flatten() {
+                        let clips = crate::strut_anim::read(&std::fs::read(e.path()).unwrap()).unwrap();
+                        println!("CLIPS {scene}/{role}/{kind}/{} : {}", e.file_name().to_string_lossy(), clips.iter().map(|c| c.name.rsplit('.').next().unwrap().to_string()).collect::<Vec<_>>().join(","));
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod male_probe2 {
+    #[test]
+    #[ignore]
+    fn momo() {
+        let d = std::path::PathBuf::from(r"C:\Users\Sandyy\AppData\Local\Temp\claude\908472535a013676\402640e9-f235-4d24-8136-8b1bc48d4a8d\scratchpad\ph_old");
+        let model = crate::strut_model::read(&std::fs::read(d.join("momo.strutmodel")).unwrap()).unwrap();
+        let bytes = std::fs::read(d.join("doggy-momo.strutanim")).unwrap();
+        let old = crate::strut_anim::read(&bytes).unwrap();
+        println!("MOMO old clips: {}", old.iter().map(|c| c.name.rsplit('.').next().unwrap().to_string()).collect::<Vec<_>>().join(","));
+        let done = crate::scene_split::split_file(&bytes, &model, "pleasurehorizons:jenny").unwrap();
+        let male = crate::strut_anim::read(&done.male).unwrap();
+        println!("MOMO male clips: {}", male.iter().map(|c| format!("{}:{}", c.name.rsplit('.').next().unwrap(), c.channels.len())).collect::<Vec<_>>().join(","));
+        let shared = crate::strut_anim::read(&std::fs::read(d.join("doggy.strutanim")).unwrap()).unwrap();
+        println!("SHARED old clips: {}", shared.iter().map(|c| c.name.rsplit('.').next().unwrap().to_string()).collect::<Vec<_>>().join(","));
+    }
+}

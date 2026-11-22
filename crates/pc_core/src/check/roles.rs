@@ -225,6 +225,30 @@ pub fn check(root: &Path, facts: &PackFacts) -> Vec<Diagnostic> {
             }
         }
 
+        /* Every role plays the clip of the same name: a clip the host has (in her own file or her skeleton's) has to be in the male's layers too, or he stands still while she moves. */
+        let names_of = |files: &[RoleFile], keep: &dyn Fn(&RoleFile) -> bool| -> BTreeSet<String> { files.iter().filter(|f| keep(f)).flat_map(|f| info_of(root, &f.rel).clips.into_iter().map(|c| c.0)).collect() };
+
+        if let (Some(host), Some(male)) = (by_role.get("host"), by_role.get("male")) {
+            let male_everyone = names_of(male, &|f| f.kind == "skeletons");
+
+            for file in host.iter().filter(|f| f.kind == "skeletons") {
+                let missing: Vec<String> = info_of(root, &file.rel).clips.into_iter().map(|c| c.0).filter(|n| !male_everyone.contains(n) && !male.iter().filter(|f| f.kind == "characters").any(|f| info_of(root, &f.rel).clips.iter().any(|c| &c.0 == n))).collect();
+
+                if !missing.is_empty() {
+                    found.push(file_level(Severity::Warning, "male-missing-clip", format!("The host plays {} in this file, but the male has no clip of that name, so he stands still while she moves.", missing.join(", ")), &file.rel));
+                }
+            }
+
+            for file in host.iter().filter(|f| f.kind == "characters") {
+                let own = names_of(male, &|f| f.kind == "characters" && f.name == file.name);
+                let missing: Vec<String> = info_of(root, &file.rel).clips.into_iter().map(|c| c.0).filter(|n| !male_everyone.contains(n) && !own.contains(n)).collect();
+
+                if !missing.is_empty() {
+                    found.push(file_level(Severity::Warning, "male-missing-clip", format!("{} plays {} in this scene, but the male has no clip of that name for her (male/characters/{}.strutanim, or the male's file for everyone), so he stands still while she moves.", file.name, missing.join(", "), file.name), &file.rel));
+                }
+            }
+        }
+
         /* One clip name, one length and one loop mode for every role. */
         let mut seen: BTreeMap<&String, (&String, f32, u8)> = BTreeMap::new();
 
@@ -368,7 +392,7 @@ mod tests {
         crate::migrate::update(&copy, true).unwrap();
 
         let after = codes(&copy);
-        let new_codes = ["scene-without-layout", "role-without-files", "role-without-file-for-skeleton", "girl-not-in-role", "old-and-new-scene-files", "animation-without-skeleton-id", "model-without-skeleton-id", "clip-differs-between-roles", "character-clip-not-in-skeleton", "layout-clip-length", "unused-male-rig", "bad-layout", "scene-without-animation", "stale-fingerprint"];
+        let new_codes = ["scene-without-layout", "role-without-files", "role-without-file-for-skeleton", "girl-not-in-role", "old-and-new-scene-files", "animation-without-skeleton-id", "model-without-skeleton-id", "clip-differs-between-roles", "character-clip-not-in-skeleton", "layout-clip-length", "unused-male-rig", "bad-layout", "scene-without-animation", "stale-fingerprint", "male-missing-clip"];
 
         assert!(new_codes.iter().all(|c| !after.contains(*c)), "a converted pack should be clean of the layout checks: {:?}", new_codes.iter().filter(|c| after.contains(**c)).collect::<Vec<_>>());
 

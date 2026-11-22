@@ -282,23 +282,28 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
     for (scene, parts) in &scenes {
         let skeleton_rel = format!("{base}/animations/scenes/{scene}/male/skeletons/{}.strutanim", id_path(&shared_id));
         let existing_skeleton = std::fs::read(root.join(&skeleton_rel)).ok().and_then(|b| strut_anim::read(&b).ok());
-        let reference = existing_skeleton.clone().unwrap_or_else(|| strut_anim::read(&parts.males[0].3).unwrap_or_default());
+        /* The male's file for everyone is what the scene's file for a skeleton (or for everyone) gave him; only when the scene has none is it the first girl's. A girl whose own
+           male clips differ from it (she has variants the others lack, say) keeps a file of her own: it is looked up before his, so he plays every clip she does. */
+        let source = parts.males.iter().find(|m| !m.1).unwrap_or(&parts.males[0]);
+        let reference = existing_skeleton.clone().unwrap_or_else(|| strut_anim::read(&source.3).unwrap_or_default());
 
         if existing_skeleton.is_none() {
-            writes.insert(skeleton_rel.clone(), parts.males[0].3.clone());
+            writes.insert(skeleton_rel.clone(), source.3.clone());
         }
 
         let mut differing = 0;
 
-        for (character, by_girl, id, bytes, _) in &parts.males {
+        for (character, by_girl, _, bytes, _) in &parts.males {
             if clips_equal(&strut_anim::read(bytes).unwrap_or_default(), &reference) {
                 continue;
             }
 
-            let folder = if *by_girl { "characters" } else { "skeletons" };
-            let file = if *by_girl { character.clone() } else { id_path(id).to_string() };
+            if !*by_girl {
+                report.findings.push(format!("The scene {scene} has a file for the skeleton {character} whose male clips differ from the one for everyone, and the male has no file per skeleton: it was left out."));
+                continue;
+            }
 
-            writes.insert(format!("{base}/animations/scenes/{scene}/male/{folder}/{file}.strutanim"), bytes.clone());
+            writes.insert(format!("{base}/animations/scenes/{scene}/male/characters/{character}.strutanim"), bytes.clone());
             differing += 1;
         }
 
@@ -603,6 +608,14 @@ mod tests {
 
         let after = snapshot(&stage);
 
+        if std::env::var("PH_LIST").is_ok() {
+            for rel in after.keys().filter(|r| r.contains("/scenes/doggy/") || r.contains("/scenes/cowgirl/")) {
+                if let Ok(c) = strut_anim::read(&after[rel]) {
+                    println!("CLIPS {rel} : {}", c.iter().map(|c| c.name.rsplit('.').next().unwrap().to_string()).collect::<Vec<_>>().join(","));
+                }
+            }
+        }
+
         /* Every model that was stripped keeps what it had: each remaining bone is where it was, its meshes and armatures are as they were and hang off the same bones. */
         for (rel, bytes) in &after {
             let Some(old) = before.get(rel).filter(|o| *o != bytes && rel.ends_with(".strutmodel")) else { continue };
@@ -623,7 +636,10 @@ mod tests {
             }
         }
 
-        let ours = |rel: &str| rel.strip_prefix("data/pleasurehorizons/asset_sync/strut/").map(|r| resources.join("assets/pleasurehorizons/strut").join(r));
+        /* Where the files go back to (`PH_TARGET`, when it is not the folder they came from) and which of them (`PH_ONLY`, a part of the path). */
+        let target_root = std::env::var("PH_TARGET").map(std::path::PathBuf::from).unwrap_or_else(|_| resources.clone());
+        let only = std::env::var("PH_ONLY").unwrap_or_default();
+        let ours = |rel: &str| rel.strip_prefix("data/pleasurehorizons/asset_sync/strut/").filter(|_| rel.contains(&only)).map(|r| target_root.join("assets/pleasurehorizons/strut").join(r));
         let (mut wrote, mut removed) = (0, 0);
 
         for (rel, bytes) in &after {
