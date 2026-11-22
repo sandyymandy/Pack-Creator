@@ -44,6 +44,7 @@ fn slow(required: bool) -> Value {
 
     p["sides"] = json!(["L", "R", "L_swap", "R_swap"]);
     p["sidesOptional"] = json!(true);
+    p["sidesRequired"] = json!(["L", "R"]);
     p
 }
 
