@@ -8,6 +8,7 @@ mod actors;
 mod blockbench;
 mod clipboard;
 mod examples;
+mod scene_templates;
 mod wizard;
 
 use base64::Engine;

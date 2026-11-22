@@ -57,7 +57,7 @@ pub struct Status {
 // Finding Blockbench
 // =================================================================
 
-fn data_dir() -> PathBuf {
+pub fn data_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir());
 
     base.join("PleasureHorizonsPackCreator").join("blockbench")
@@ -77,13 +77,21 @@ pub fn actor_folders() -> Vec<String> {
     found
 }
 
+/// The folder of the game's scene templates (written when it is asked for, so it is always the current ones), for the toolkit to be told of.
+pub fn template_folders() -> Vec<String> {
+    match crate::scene_templates::write() {
+        Ok(_) => vec![crate::scene_templates::folder().display().to_string().replace('\\', "/")],
+        Err(_) => Vec::new(),
+    }
+}
+
 /// Tells a Blockbench that is open where the preset folders are (one that is not open is told the next time the Pack Creator opens it). Never starts Blockbench.
 pub fn announce_actors() -> Result<(), String> {
     if !(bridge_alive() || pages().is_some()) {
         return Err("Blockbench is not open".into());
     }
 
-    let reply = deliver(reach()?, ANNOUNCE, &json!({ "actorFolders": actor_folders() }))?;
+    let reply = deliver(reach()?, ANNOUNCE, &json!({ "actorFolders": actor_folders(), "templateFolders": template_folders() }))?;
 
     if reply == "ok" { Ok(()) } else { Err(reply) }
 }
@@ -92,11 +100,12 @@ pub fn announce_actors() -> Result<(), String> {
 /// person added by hand stays.
 const ANNOUNCE: &str = r#"(async (job) => {
   try {
-    const key = 'strut_actor_preset_folders';
-    let have = [];
-    try { have = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { have = []; }
-    const ours = p => String(p).split('\\').join('/').indexOf('/PleasureHorizonsPackCreator/blockbench/actors/') >= 0;
-    localStorage.setItem(key, JSON.stringify([...have.filter(p => !ours(p)), ...(job.actorFolders || [])]));
+    const ours = p => String(p).split('\\').join('/').indexOf('/PleasureHorizonsPackCreator/blockbench/') >= 0;
+    for (const [key, mine] of [['strut_actor_preset_folders', job.actorFolders || []], ['strut_scene_template_folders', job.templateFolders || []]]) {
+      let have = [];
+      try { have = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { have = []; }
+      localStorage.setItem(key, JSON.stringify([...have.filter(p => !ours(p)), ...mine]));
+    }
   } catch (e) { return 'The preset folders could not be registered: ' + e; }
   return 'ok';
 })"#;
@@ -602,11 +611,12 @@ const SCRIPT: &str = r#"(async (job) => {
   }
 
   try {
-    const key = 'strut_actor_preset_folders';
-    let have = [];
-    try { have = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { have = []; }
-    const ours = p => String(p).split('\\').join('/').indexOf('/PleasureHorizonsPackCreator/blockbench/actors/') >= 0;
-    localStorage.setItem(key, JSON.stringify([...have.filter(p => !ours(p)), ...(job.actorFolders || [])]));
+    const ours = p => String(p).split('\\').join('/').indexOf('/PleasureHorizonsPackCreator/blockbench/') >= 0;
+    for (const [key, mine] of [['strut_actor_preset_folders', job.actorFolders || []], ['strut_scene_template_folders', job.templateFolders || []]]) {
+      let have = [];
+      try { have = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { have = []; }
+      localStorage.setItem(key, JSON.stringify([...have.filter(p => !ours(p)), ...mine]));
+    }
   } catch (e) { /* no storage: the toolkit is told again next time */ }
 
   const link = Plugins.all.find(p => p.id === 'pc_bridge');
@@ -703,6 +713,7 @@ fn plugin_data() -> Result<Value, String> {
         "tag": installed_marker(),
         "bridgeVersion": BRIDGE_VERSION,
         "actorFolders": actor_folders(),
+        "templateFolders": template_folders(),
     }))
 }
 
