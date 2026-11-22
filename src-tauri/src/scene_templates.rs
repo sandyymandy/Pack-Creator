@@ -40,7 +40,7 @@ fn phase(id: &str, name: &str, description: &str, required: bool, max_variants: 
 
 /// The slow phase: she changes side during it, so it may come in one clip per side (`slow_L`, `slow_R`, and the swapping sides), or as one plain clip.
 fn slow(required: bool) -> Value {
-    let mut p = phase("slow", "Slow", "What plays while the player is not thrusting. One plain clip, or one for each side.", required, 1);
+    let mut p = phase("slow", "Slow", "What plays while the player is not thrusting. One plain clip, or one for each side; there can be several variants, as with fast.", required, 4);
 
     p["sides"] = json!(["L", "R", "L_swap", "R_swap"]);
     p["sidesOptional"] = json!(true);
