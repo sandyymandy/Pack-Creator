@@ -463,7 +463,13 @@ pub fn read(bytes: &[u8]) -> Result<Model, String> {
 /// Writes the model again without the group bones at these indices and the cubes only they hold. Every other byte is copied as it was (meshes, skinning, armatures, extensions and
 /// the strings), and the indices that point at bones and cubes are renumbered. A removed bone that holds a mesh, or that an armature hangs off, is refused.
 pub fn remove_bones(bytes: &[u8], remove: &std::collections::HashSet<usize>) -> Result<Vec<u8>, String> {
+    edit_bones(bytes, remove, &std::collections::HashSet::new())
+}
+
+/// Like `remove_bones`, and the bones in `empty` stay but lose their cubes (and the cubes only they held). A bone that is both removed and emptied is removed.
+pub fn edit_bones(bytes: &[u8], remove: &std::collections::HashSet<usize>, empty: &std::collections::HashSet<usize>) -> Result<Vec<u8>, String> {
     let model = read(bytes)?;
+    let holds = |i: usize, element: &Element| !(empty.contains(&i) && element.kind == 1);
     let o = &model.offsets;
     let mut new_bone = vec![-1i32; model.group_bones.len()];
     let mut kept = 0;
@@ -491,8 +497,8 @@ pub fn remove_bones(bytes: &[u8], remove: &std::collections::HashSet<usize>) -> 
     let mut new_cube: BTreeMap<u16, u16> = BTreeMap::new();
     let mut cube_order: Vec<usize> = Vec::new();
 
-    for bone in model.group_bones.iter().enumerate().filter(|(i, _)| !remove.contains(i)).map(|(_, b)| b) {
-        for element in bone.elements.iter().filter(|e| e.kind == 1) {
+    for (i, bone) in model.group_bones.iter().enumerate().filter(|(i, _)| !remove.contains(i)) {
+        for element in bone.elements.iter().filter(|e| e.kind == 1 && holds(i, e)) {
             if !new_cube.contains_key(&element.index) {
                 new_cube.insert(element.index, cube_order.len() as u16);
                 cube_order.push(element.index as usize);
@@ -513,9 +519,9 @@ pub fn remove_bones(bytes: &[u8], remove: &std::collections::HashSet<usize>) -> 
         out.extend_from_slice(&bytes[at.start..at.parent]);
         out.extend_from_slice(&(parent as i16).to_le_bytes());
         out.extend_from_slice(&bytes[at.parent + 2..at.rotation + 12 + 1]);
-        out.extend_from_slice(&(bone.elements.len() as u16).to_le_bytes());
+        out.extend_from_slice(&(bone.elements.iter().filter(|e| holds(i, e)).count() as u16).to_le_bytes());
 
-        for element in &bone.elements {
+        for element in bone.elements.iter().filter(|e| holds(i, e)) {
             out.push(element.kind);
             out.extend_from_slice(&(if element.kind == 1 { new_cube[&element.index] } else { element.index }).to_le_bytes());
         }
@@ -548,6 +554,34 @@ pub fn remove_bones(bytes: &[u8], remove: &std::collections::HashSet<usize>) -> 
         return Err("the model without those bones lost something it should have kept".into());
     }
 
+    Ok(out)
+}
+
+/// Sets the size of every texture (the pixels, not the UV space the faces are written in).
+pub fn set_texture_size(bytes: &[u8], width: u16, height: u16) -> Result<Vec<u8>, String> {
+    let model = read(bytes)?;
+    let count = model.textures.len();
+    let first = model.offsets.bones_start - 10 * count;
+    let mut out = bytes.to_vec();
+
+    for i in 0..count {
+        let at = first + 10 * i;
+
+        out[at + 2..at + 4].copy_from_slice(&width.to_le_bytes());
+        out[at + 4..at + 6].copy_from_slice(&height.to_le_bytes());
+    }
+
+    read(&out)?;
+    Ok(out)
+}
+
+/// The model without any extension section (physics, the skeleton id): they name bones of the body it was made for.
+pub fn drop_extensions(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let model = read(bytes)?;
+    let mut out = bytes[..model.offsets.extensions_at].to_vec();
+    let flags = u16::from_le_bytes([bytes[6], bytes[7]]) & !1;
+
+    out[6..8].copy_from_slice(&flags.to_le_bytes());
     Ok(out)
 }
 

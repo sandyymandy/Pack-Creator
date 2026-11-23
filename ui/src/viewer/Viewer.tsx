@@ -3,7 +3,7 @@ import { api } from '../api';
 import { BlockbenchDialog } from '../BlockbenchDialog';
 import { Dialog } from '../Dialogs';
 import { messageOf, notify } from '../notify';
-import type { ArmFixReport, ClipData, ViewerFiles } from '../types';
+import type { ModelData, ClipData, ViewerFiles } from '../types';
 import { ClipManager } from '../ClipManager';
 import { CueEditor } from './CueEditor';
 import { PhysicsPanel } from './PhysicsPanel';
@@ -11,6 +11,9 @@ import { createViewer, type Shading, type Smoothing, type Viewer as Scene } from
 
 const nameOf = (rel: string) => rel.slice(rel.lastIndexOf('/') + 1);
 const SPEEDS = [0.25, 0.5, 1, 2];
+
+const SLOT_ORDER = ['head', 'chest', 'legs', 'feet'];
+const slotOf = (file: string) => (file.split('/').pop() ?? '').replace('.strutmodel', '');
 
 /** The 3D view of a model or an animation of a girl in the pack: her model, her texture, and any clip of hers played on it with its cues. */
 export function Viewer({ rel }: { rel: string }) {
@@ -36,9 +39,10 @@ export function Viewer({ rel }: { rel: string }) {
   const [pickModel, setPickModel] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
   const [reload, setReload] = useState(0);
-  const [armReport, setArmReport] = useState<ArmFixReport | null>(null);
-  const [armBusy, setArmBusy] = useState(false);
   const [managing, setManaging] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
+  /* Which slots of her armour are worn in the preview. */
+  const [worn, setWorn] = useState<Set<string>>(new Set());
 
   const isModel = rel.endsWith('.strutmodel');
   const clip = clips.find(c => c.name === clipName) ?? null;
@@ -101,6 +105,30 @@ export function Viewer({ rel }: { rel: string }) {
     return () => window.removeEventListener('focus', check);
   }, [model, animation, files]);
 
+  /* The armour worn in the preview: each worn slot's model, on the pack's armour texture or the game's. */
+  useEffect(() => {
+    if (!files) return;
+
+    let current = true;
+
+    void (async () => {
+      const pieces: { model: ModelData; texture: string | null }[] = [];
+      const texture = files.armourTexture ? await api.readImage(files.armourTexture).catch(() => null) : await api.bundledArmourTexture().catch(() => null);
+
+      for (const file of files.armour.filter(f => worn.has(slotOf(f)))) {
+        try {
+          pieces.push({ model: await api.readModel(file), texture });
+        } catch (error) {
+          notify(messageOf(error));
+        }
+      }
+
+      if (current) scene.current?.setArmour(pieces);
+    })();
+
+    return () => { current = false; };
+  }, [files, worn, reload]);
+
   /* The model and its texture. */
   useEffect(() => {
     if (!model || !files) return;
@@ -110,7 +138,7 @@ export function Viewer({ rel }: { rel: string }) {
     void (async () => {
       try {
         const data = await api.readModel(model);
-        const texture = files.texture ? await api.readImage(files.texture).catch(() => null) : null;
+        const texture = files.texture ? await api.readImage(files.texture).catch(() => null) : model.includes('/strut/models/armour/') ? await api.bundledArmourTexture().catch(() => null) : null;
 
         if (!current) return;
 
@@ -153,6 +181,8 @@ export function Viewer({ rel }: { rel: string }) {
   }, [clipName, clips]);
 
   useEffect(() => { scene.current?.setSpeed(speed); }, [speed]);
+  /* An armour model is all armour bones, which count as the scene rig: show them for it. */
+  useEffect(() => { if (model) setRigHidden(!model.includes('/strut/models/armour/')); }, [model]);
   useEffect(() => { scene.current?.setRigHidden(rigHidden); }, [rigHidden]);
   useEffect(() => { scene.current?.setShading(shading); }, [shading]);
   useEffect(() => { scene.current?.setBrightness(brightness); }, [brightness]);
@@ -191,38 +221,6 @@ export function Viewer({ rel }: { rel: string }) {
     }
   };
 
-  /* Asks what fixing the lower arms would do, and shows it before anything is changed. */
-  const previewArmFix = async () => {
-    setArmBusy(true);
-
-    try {
-      const report = await api.fixArms(rel, false);
-
-      if (report.fixed.length === 0 && report.skipped.length === 0 && report.removed.length === 0) notify('The lower arms of this model are already straight and it has no old item bones: nothing to fix.');
-      else setArmReport(report);
-    } catch (error) {
-      notify(messageOf(error));
-    } finally {
-      setArmBusy(false);
-    }
-  };
-
-  const applyArmFix = async () => {
-    setArmBusy(true);
-
-    try {
-      const report = await api.fixArms(rel, true);
-
-      setArmReport(null);
-      setReload(count => count + 1);
-      notify(`Fixed ${report.fixed.length} lower arm${report.fixed.length === 1 ? '' : 's'} and removed ${report.removed.length} old item bone${report.removed.length === 1 ? '' : 's'}. A copy of the model as it was is kept in the project's .packcreator/backups folder.`);
-    } catch (error) {
-      notify(messageOf(error));
-    } finally {
-      setArmBusy(false);
-    }
-  };
-
   const editInBlockbench = () => {
     if (isModel) {
       void openInBlockbench(rel, null);
@@ -255,23 +253,44 @@ export function Viewer({ rel }: { rel: string }) {
         )}
         <button class="btn small" disabled={opening} title={isModel ? 'Open this model and her texture in Blockbench' : 'Open this animation in Blockbench, on a model you choose'} onClick={editInBlockbench}>{opening ? 'Opening...' : 'Edit in Blockbench'}</button>
         {!isModel && animation && clips.length > 0 && <button class="btn small" title="See every animation in this file and remove the ones you do not want" onClick={() => setManaging(true)}>Animations…</button>}
-        {isModel && <button class="btn small" disabled={armBusy} title="Straightens a lower arm bone that is turned (and turned back in its cubes), keeping the arm looking the same, and removes the old weapon, offhand and customHand bones." onClick={previewArmFix}>Fix arms</button>}
         <span class="grow" />
-        <select class="input small-select" value={shading} title="How the model is drawn" onChange={e => setShading((e.target as HTMLSelectElement).value as Shading)}>
-          <option value="lit">Lit</option>
-          <option value="flat">Flat (texture only)</option>
-          <option value="normals">Normals</option>
-          <option value="wire">Wireframe</option>
-        </select>
-        <select class="input small-select" value={smoothing} title="Whether neighbouring faces of a mesh blend their shading" onChange={e => setSmoothing((e.target as HTMLSelectElement).value as Smoothing)}>
-          <option value="authored">Smooth: as authored</option>
-          <option value="smooth">Smooth: all meshes</option>
-          <option value="flat">Smooth: off</option>
-        </select>
-        <label class="check-inline" title="How bright the model is"><span class="muted">Brightness</span> <input type="range" class="bright" min={0.2} max={2} step={0.05} value={brightness} onInput={e => setBrightness(Number((e.target as HTMLInputElement).value))} /></label>
-        <label class="check-inline"><input type="checkbox" checked={grid} onChange={e => setGrid((e.target as HTMLInputElement).checked)} /> Grid</label>
-        <label class="check-inline" title="The scene rig: the male's body, items, armour and cameras"><input type="checkbox" checked={!rigHidden} onChange={e => setRigHidden(!(e.target as HTMLInputElement).checked)} /> Scene rig</label>
-        <span class="muted">{info}</span>
+        <span class="muted viewer-info">{info}</span>
+        <div class="view-menu">
+          <button class={'btn small' + (viewOpen ? ' on' : '')} title="How the model is drawn, the armour it wears, the grid and the scene rig" onClick={() => setViewOpen(open => !open)}>View ▾</button>
+          {viewOpen && (
+            <>
+              <div class="view-backdrop" onClick={() => setViewOpen(false)} />
+              <div class="view-panel">
+                <label class="view-row"><span>Shading</span>
+                  <select class="input small-select" value={shading} onChange={e => setShading((e.target as HTMLSelectElement).value as Shading)}>
+                    <option value="lit">Lit</option>
+                    <option value="flat">Flat (texture only)</option>
+                    <option value="normals">Normals</option>
+                    <option value="wire">Wireframe</option>
+                  </select>
+                </label>
+                <label class="view-row"><span>Smoothing</span>
+                  <select class="input small-select" value={smoothing} onChange={e => setSmoothing((e.target as HTMLSelectElement).value as Smoothing)}>
+                    <option value="authored">As authored</option>
+                    <option value="smooth">All meshes</option>
+                    <option value="flat">Off</option>
+                  </select>
+                </label>
+                <label class="view-row"><span>Brightness</span><input type="range" class="bright" min={0.2} max={2} step={0.05} value={brightness} onInput={e => setBrightness(Number((e.target as HTMLInputElement).value))} /></label>
+                <label class="view-row check-inline"><input type="checkbox" checked={grid} onChange={e => setGrid((e.target as HTMLInputElement).checked)} /> Grid</label>
+                <label class="view-row check-inline" title="The scene rig: the male's body, items, armour and cameras"><input type="checkbox" checked={!rigHidden} onChange={e => setRigHidden(!(e.target as HTMLInputElement).checked)} /> Scene rig</label>
+                {files && files.armour.length > 0 && isModel && (
+                  <div class="view-group">
+                    <span class="muted">Armour worn</span>
+                    {files.armour.map(file => slotOf(file)).sort((x, y) => SLOT_ORDER.indexOf(x) - SLOT_ORDER.indexOf(y)).map(slot => (
+                      <label key={slot} class="view-row check-inline"><input type="checkbox" checked={worn.has(slot)} onChange={e => setWorn(previous => { const next = new Set(previous); if ((e.target as HTMLInputElement).checked) next.add(slot); else next.delete(slot); return next; })} /> {slot}</label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div class="viewer-canvas" ref={host} />
@@ -328,40 +347,6 @@ export function Viewer({ rel }: { rel: string }) {
       {managing && animation && <ClipManager rel={animation} clips={clips} onClose={() => setManaging(false)} onDeleted={() => { setManaging(false); setReload(count => count + 1); }} />}
 
       {blockbenchDialog && <BlockbenchDialog onClose={() => setBlockbenchDialog(false)} />}
-
-      {armReport && (
-        <Dialog title="Fix the lower arms" onClose={() => setArmReport(null)}>
-          {armReport.fixed.length > 0 && (
-            <div class="field">
-              <label>What will change</label>
-              {armReport.fixed.map(item => (
-                <div key={item.bone} class="hint">
-                  <strong>{item.bone}</strong>: the bone's rotation {item.oldRotation}° becomes 0°.
-                  {item.cubes.map(cube => <div key={cube.name}>&nbsp;&nbsp;{cube.name}: pivot moves to the bone's, rotation {cube.oldRotation}° becomes {cube.newRotation}°, and its box is moved so it stays where it is.</div>)}
-                  {item.children.length > 0 && <div>&nbsp;&nbsp;{item.children.join(', ')} hangs off this bone and is no longer turned by it.</div>}
-                </div>
-              ))}
-              <div class="hint">The arm looks the same at rest. Animations that turn the lower arm are relative to the bone's rest rotation, so look over the arms in them afterwards.</div>
-            </div>
-          )}
-          {armReport.removed.length > 0 && (
-            <div class="field">
-              <label>Old item bones that will be removed</label>
-              <div class="hint">{armReport.removed.join(', ')}. The game places held items itself, so these are only in the way.</div>
-            </div>
-          )}
-          {armReport.skipped.length > 0 && (
-            <div class="field">
-              <label>Left alone</label>
-              {armReport.skipped.map(item => <div key={item.bone} class="hint"><strong>{item.bone}</strong>: {item.reason}.</div>)}
-            </div>
-          )}
-          <div class="foot">
-            <button class="btn ghost" onClick={() => setArmReport(null)}>Cancel</button>
-            <button class="btn" disabled={armBusy || (armReport.fixed.length === 0 && armReport.removed.length === 0)} onClick={applyArmFix}>{armBusy ? 'Fixing...' : 'Fix them'}</button>
-          </div>
-        </Dialog>
-      )}
 
       {pickModel && files && (
         <Dialog title="Edit the animation on which model?" onClose={() => setPickModel(null)}>

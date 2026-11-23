@@ -7,7 +7,7 @@ import { UpdateBanner } from './UpdateBanner';
 import type { Opened } from './types';
 import { Workspace } from './Workspace';
 
-type Screen = { name: 'home' } | { name: 'new' } | { name: 'workspace'; opened: Opened };
+type Screen = { name: 'home' } | { name: 'new'; importGirls?: boolean } | { name: 'workspace'; opened: Opened; importGirls?: boolean };
 
 export function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
@@ -33,9 +33,9 @@ export function App() {
 
   return (
     <>
-      {screen.name === 'home' && <Home onNew={() => setScreen({ name: 'new' })} onOpen={open} onOpenFolder={openFolder} />}
-      {screen.name === 'new' && <NewProject onCancel={() => setScreen({ name: 'home' })} onCreated={opened => setScreen({ name: 'workspace', opened })} />}
-      {screen.name === 'workspace' && <Workspace key={screen.opened.root} opened={screen.opened} onHome={home} />}
+      {screen.name === 'home' && <Home onNew={() => setScreen({ name: 'new' })} onNewFromGirls={() => setScreen({ name: 'new', importGirls: true })} onOpen={open} onOpenFolder={openFolder} />}
+      {screen.name === 'new' && <NewProject onCancel={() => setScreen({ name: 'home' })} onCreated={opened => setScreen({ name: 'workspace', opened, importGirls: screen.importGirls })} />}
+      {screen.name === 'workspace' && <Workspace key={screen.opened.root} opened={screen.opened} onHome={home} startImport={screen.importGirls} />}
       <Toaster />
       <UpdateBanner />
     </>

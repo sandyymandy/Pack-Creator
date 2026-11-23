@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.3.0
+
+Armour, a tools dock, and fixes for the models and scenes of imported girls.
+
+### Armour
+- **Armour is cut out of the girls' models.** The armour bones of an old model (`armorChest`, `armorPantsUpL`, `armorShoesR`...) become the four slot models the game wears (`strut/models/armour/<girl>/head|chest|legs|feet`), taken from her dressed model (or the nude one if only that has it) and removed from both of her models. A set and a wearer file that extend the game's are written for her.
+- **Armour previews** use the game's armour texture (or the pack's own `textures/armor/armor.png`), in the viewer and when opened in Blockbench.
+- **Wear her armour in the viewer:** the View menu has head, chest, legs and feet checkboxes that put each slot on her model, following her bones.
+- **Armour wearer form:** wearer files open as a form (the wearer it starts from, the bones each slot hides, its damps) with a JSON view beside it.
+
+### Fixing models and scenes
+- **Fix the models** (new tool): lists what can be fixed, per girl (armour, the lower-arm bones, the old male rig). Apply everything or pick, and undo it. Imports and the pack update apply the armour and arm fixes on their own. The old Fix arms button in the viewer is gone.
+- **Scenes whose girl's model has already lost the old male rig** (an earlier import) can now be converted: the update uses the old rig to check every bone is posed as before, then writes the role files and the layout.
+- **Rename animations:** the Animations dialog lets you rename clips as well as remove them. Suggest names adds the `animation.` prefix and calls `start` `intro`. A scene layout that lists a clip follows the rename, with its phase, variant and side.
+
+### The app
+- **Tools dock:** the top bar's many buttons moved into a dock that slides in from the right (the three dots, or Ctrl+J), with each tool's name and what it does, in groups. Customize reorders the tools and pins any of them to the top bar.
+- **The viewer's toolbar** is tidied: the display options (shading, smoothing, brightness, grid, scene rig, armour) are in a View menu.
+- **Preview a girl** from her girl file with one button.
+- **Import:** the old resource pack can be picked as a folder or a zip (two buttons), and a pack with one girl asks for her profile file instead of a folder.
+- **New project from old girls** on the home page: makes the project and opens the import straight away.
+
+### Fixes
+- The player's skin is drawn only on the male's own body, no longer on the girl's armour, items or cameras.
+- The male's penis shows again in the scene simulator (his meshes and the armatures that move them were left out).
+- Armour models are visible in the viewer (their bones were hidden as scene rig).
+
 ## 1.2.0
 
 One model per participant, and a lot of tooling around it. **Packs made before this are offered an update when you open them** (it shows what it will do first, and has an Undo for the scene conversion). See the "Pack formats" page in the docs.

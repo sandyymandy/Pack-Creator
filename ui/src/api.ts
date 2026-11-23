@@ -1,4 +1,4 @@
-import type { ActorSummary, AppUpdate, MigrationStatus, SplitReport, SkeletonPlan, SkeletonWritten, SceneScope, GirlLook, ScenePlan, ArmFixReport, SearchHit, SimFiles, SimGirl, BlockbenchStatus, FileVersion, GameLogView, ClipData, CueEvent, ModelData, ViewerFiles, ImportResult, Choices, Reference, Content, Diagnostic, Entry, Located, NewFile, NewProject, Opened, RecentView, Written } from './types';
+import type { FixItem, FixOutcome, ActorSummary, AppUpdate, MigrationStatus, SplitReport, SkeletonPlan, SkeletonWritten, SceneScope, GirlLook, ScenePlan, SearchHit, SimFiles, SimGirl, BlockbenchStatus, FileVersion, GameLogView, ClipData, CueEvent, ModelData, ViewerFiles, ImportResult, Choices, Reference, Content, Diagnostic, Entry, Located, NewFile, NewProject, Opened, RecentView, Written } from './types';
 import { mock } from './mock';
 
 /** Whether the page runs inside the Pack Creator's window. In a plain browser (for developing the page) a small in-memory stand-in answers instead. */
@@ -60,18 +60,21 @@ export const api = {
   skeletonPlan: (choices: Record<string, string>) => call<SkeletonPlan>('skeleton_plan', { choices }),
   skeletonApply: (choices: Record<string, string>) => call<SkeletonWritten>('skeleton_apply', { choices }),
   migrationStatus: () => call<MigrationStatus>('migration_status'),
+  modelFixesScan: () => call<FixItem[]>('model_fixes_scan'),
+  modelFixesApply: (chosen: { fix: string; girl: string }[]) => call<FixOutcome>('model_fixes_apply', { chosen }),
   splitScenes: (apply: boolean) => call<SplitReport>('split_scenes', { apply }),
   undoSplitScenes: (stamp: string) => call<number>('undo_split_scenes', { stamp }),
-  fixArms: (rel: string, apply: boolean) => call<ArmFixReport>('fix_arms', { rel, apply }),
   /** Puts the basic soft bones (chest, belly, cheeks, ass: those the model has, by name) in a model's physics file. */
   addBasicPhysics: (rel: string) => call<{ path: string; added: string[] }>('add_basic_physics', { rel }),
   readAnimation: (rel: string) => call<ClipData[]>('read_animation', { rel }),
+  renameClips: (rel: string, renames: [string, string][]) => call<ClipData[]>('rename_clips', { rel, renames }),
   deleteClips: (rel: string, clips: string[]) => call<ClipData[]>('delete_clips', { rel, clips }),
   sceneScopes: () => call<SceneScope[]>('scene_scopes'),
   sceneMakeSkeletonWide: (scene: string, girl: string) => call<string[]>('scene_make_skeleton_wide', { scene, girl }),
   sceneMakeGirlSpecific: (scene: string, girl: string, keepOriginal: boolean) => call<string[]>('scene_make_girl_specific', { scene, girl, keepOriginal }),
   saveClipEvents: (rel: string, clip: string, events: CueEvent[]) => call<ClipData[]>('save_clip_events', { rel, clip, events }),
   cueNames: () => call<string[]>('cue_names'),
+  bundledArmourTexture: () => call<string>('bundled_armour_texture'),
   bundledMale: () => call<ModelData>('bundled_male'),
   bundledBed: () => call<{ model: ModelData; texture: string }>('bundled_bed'),
   checkGirlModels: (bodyType: string, nude: string | null, dressed: string | null, texture: string | null) => call<unknown>('check_girl_models', { bodyType, nude, dressed, texture }),

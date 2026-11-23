@@ -429,3 +429,31 @@ mod male_probe2 {
         println!("SHARED old clips: {}", shared.iter().map(|c| c.name.rsplit('.').next().unwrap().to_string()).collect::<Vec<_>>().join(","));
     }
 }
+
+#[cfg(test)]
+mod dump_probe {
+    /// `PROBE_FILES=a;b cargo test -p pc_core -- --ignored --nocapture dump_bones`
+    #[test]
+    #[ignore]
+    fn dump_bones() {
+        for path in std::env::var("PROBE_FILES").unwrap().split(';') {
+            let m = crate::strut_model::read(&std::fs::read(path).unwrap()).unwrap();
+            println!("PROBE FILE {path}: bones={} cubes={} meshes={} ext={:?} skeleton={:?} textures={:?}", m.group_bones.len(), m.cubes.len(), m.meshes.len(), m.extensions, m.skeleton_id, m.textures.iter().map(|t| format!("{}:{}x{}", t.name, t.width, t.height)).collect::<Vec<_>>());
+            for b in &m.group_bones {
+                let parent = if b.parent_index >= 0 { m.group_bones[b.parent_index as usize].name.clone() } else { "-".into() };
+                println!("PROBE   {} <- {} pivot={:?} rot={:?} cubes={}", b.name, parent, b.pivot, b.rotation, b.elements.len());
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod cube_probe {
+    #[test]
+    #[ignore]
+    fn dump_cubes() {
+        let m = crate::strut_model::read(&std::fs::read(std::env::var("PROBE_FILE").unwrap()).unwrap()).unwrap();
+        println!("PROBE textures {:?}", m.textures);
+        for b in &m.group_bones { for e in b.elements.iter().filter(|e| e.kind == 1).take(2) { let c = &m.cubes[e.index as usize]; println!("PROBE {} cube {} tex={} from={:?} to={:?} infl={} boxuv={} faces={:?}", b.name, c.name, c.texture_index, c.from, c.to, c.inflate, c.box_uv, c.faces.iter().map(|f| (f.face_id, f.u1, f.v1, f.u2, f.v2)).collect::<Vec<_>>()); } }
+    }
+}

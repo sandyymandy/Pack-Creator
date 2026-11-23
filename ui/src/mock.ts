@@ -185,6 +185,8 @@ export async function mock(command: string, args: Args = {}): Promise<unknown> {
     case 'register_actors': return { base: 15, pack: 2, folders: [], announced: false };
     case 'migration_status': return { format: 2, current: 2, needed: false, reason: null, steps: [], newer: false };
     case 'split_scenes': return { applied: !!args.apply, stamp: args.apply ? '1' : null, scenes: 3, files_written: 12, files_removed: 6, models_stripped: 2, dropped_bones: [], approximate: [], skipped: [], findings: [] };
+    case 'model_fixes_scan': return [{ fix: 'armour', girl: 'amber', title: 'Armour', detail: 'Cuts her armour (head, chest, legs, feet) out of her dressed model.' }, { fix: 'arms', girl: 'amber', title: 'Arms', detail: 'Moves the rotation of the lower arms into their cubes.' }];
+    case 'model_fixes_apply': return { stamp: '2', notes: ['amber: armour cut out.'], written: [] };
     case 'undo_split_scenes': return 12;
     case 'old_pack_model': return mock('read_model', {});
     case 'old_pack_texture': return delay('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
@@ -197,7 +199,7 @@ export async function mock(command: string, args: Args = {}): Promise<unknown> {
       files.set('data/pleasurehorizons/girls/zoe.json', '{\n  "id": "zoe",\n  "type": "settler",\n  "components": {}\n}\n');
       return delay({ girl: 'data/pleasurehorizons/girls/zoe.json', written: [], notes: [{ level: 'kept', message: 'The nude model: 40 bones, 120 cubes.' }, { level: 'kept', message: 'Her animations: 12 base animation(s) and 3 scene file(s).' }, { level: 'error', message: 'The scene "Hug" uses the animation "x", but her animation file has no such animation.' }] });
     }
-    case 'viewer_files': return delay({ id: 'amber', models: ['data/pleasurehorizons/asset_sync/strut/models/entities/girls/nude/amber.strutmodel'], texture: null, animations: ['data/pleasurehorizons/asset_sync/strut/animations/entities/girls/base.amber.strutanim'] });
+    case 'viewer_files': return delay({ id: 'amber', models: ['data/pleasurehorizons/asset_sync/strut/models/entities/girls/nude/amber.strutmodel'], texture: null, armour: [], armourTexture: null, animations: ['data/pleasurehorizons/asset_sync/strut/animations/entities/girls/base.amber.strutanim'] });
     case 'add_basic_physics': return delay({ path: 'data/pleasurehorizons/asset_sync/strut/physics/models/entities/girls/nude/amber.json', added: ['boobL', 'boobR', 'assL', 'assR'] });
     case 'read_model': return delay({
       version: 101, unitsPerBlock: 16, boundsMin: [0, 0, 0], boundsMax: [0, 0, 0], textures: [{ name: 't', width: 64, height: 64, uvWidth: 64, uvHeight: 64 }],

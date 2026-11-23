@@ -290,6 +290,8 @@ export interface ViewerFiles {
   id: string;
   models: string[];
   texture: string | null;
+  armour: string[];
+  armourTexture: string | null;
   animations: string[];
 }
 
@@ -331,6 +333,8 @@ export interface SkeletonGroup { id: string; models: string[]; animations: numbe
 export interface SkeletonPlan { assignments: SkeletonAssignment[]; groups: SkeletonGroup[]; unreadable: string[] }
 export interface SkeletonWritten { written: number; already: number; failed: string[] }
 
+export interface FixItem { fix: string; girl: string; title: string; detail: string }
+export interface FixOutcome { stamp: string | null; notes: string[]; written: string[] }
 export interface SplitReport { applied: boolean; stamp: string | null; scenes: number; files_written: number; files_removed: number; models_stripped: number; dropped_bones: [string, number][]; approximate: [string, number][]; skipped: string[]; findings: string[] }
 export interface MigrationStatus { format: number; current: number; needed: boolean; reason: string | null; steps: { to: number; title: string; detail: string }[]; newer: boolean }
 export interface ActorSummary { base: number; pack: number; folders: string[]; announced: boolean }

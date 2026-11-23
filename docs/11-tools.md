@@ -94,3 +94,8 @@ If another program changes a file you have open, it reloads, and the tree follow
 ## Settings
 
 The sliders icon opens Settings: autosave delay, editor text size, minimap, word wrap, tab size, the simulator's thrust and cum keys and its sound. Every change applies at once.
+
+
+## Fix the models
+
+The wrench button in the top bar lists what can be fixed in the models of the pack, for each girl: her **armour** (the `armor...` bones cut out of her dressed model into one model for each slot, `head`, `chest`, `legs` and `feet`, under `strut/models/armour/<girl>/`, and taken out of both of her models), her **arms** (a lower arm built with a rotated bone, and the old hand item bones) and the **old male rig** for the whole pack. Tick what you want and choose **Apply picked**, or **Apply all**. Undo puts the files back. An import and the pack update apply the armour and arms fixes by themselves, so this is for a pack that was not imported.

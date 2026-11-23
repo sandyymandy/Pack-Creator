@@ -35,10 +35,14 @@ export function withMale(girl: ModelData, male: ModelData): ModelData {
         ...b,
         name: nameOf(b),
         parentIndex: b.parentIndex < 0 ? -1 : b.parentIndex + bones,
-        elements: b.elements.map(e => ({ ...e, index: e.index + cubes }))
+        elements: b.elements.map(e => ({ ...e, index: e.index + (e.kind === 1 ? cubes : girl.meshes.length) }))
       }))
     ],
-    cubes: [...girl.cubes, ...male.cubes.map(c => ({ ...c, textureIndex: texture }))]
+    cubes: [...girl.cubes, ...male.cubes.map(c => ({ ...c, textureIndex: texture }))],
+    /* His free-form meshes (the penis is made of them) and the armatures that move them, after hers. */
+    meshes: [...girl.meshes, ...male.meshes.map(m => ({ ...m, textureIndex: texture, armatureIndex: m.armatureIndex >= 0 ? m.armatureIndex + girl.armatures.length : -1 }))],
+    armatureCount: girl.armatures.length + male.armatures.length,
+    armatures: [...girl.armatures, ...male.armatures.map(a => ({ ...a, name: PREFIX + a.name, parentGroupBone: a.parentGroupBone >= 0 ? a.parentGroupBone + bones : -1, bones: a.bones.map(b => ({ ...b, name: PREFIX + b.name })) }))]
   };
 }
 
@@ -46,7 +50,7 @@ export function withMale(girl: ModelData, male: ModelData): ModelData {
 function joined(clip: ClipData, male: ModelData, theirs: ClipData | undefined): ClipData {
   if (!theirs) return clip;
 
-  return { ...clip, channels: [...clip.channels, ...theirs.channels.filter(c => c.kind === 'GROUP_BONE').map(c => ({ ...c, target: targetOf(male, c.target) }))] };
+  return { ...clip, channels: [...clip.channels, ...theirs.channels.map(c => ({ ...c, target: c.kind === 'GROUP_BONE' ? targetOf(male, c.target) : PREFIX + c.target }))] };
 }
 
 /** The girl's animation files with the male's clips joined to each clip they have a male for; the male's files are looked in in the order given. */

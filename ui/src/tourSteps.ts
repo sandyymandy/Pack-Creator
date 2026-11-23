@@ -83,6 +83,11 @@ export function workspaceSteps(openDocs: (page: string) => void): TourStep[] {
       text: 'The pack is checked against the game\'s rules whenever you save: a wrong value, a missing model, a cue nothing fires. Click a problem to jump to it, and look for the quick fix. Aim for "No problems found".'
     },
     {
+      target: '[data-tour="dock"]',
+      title: 'The tools dock',
+      text: 'The three dots (or Ctrl+J) slide open the dock: every tool with its name and what it does, in groups. Customize lets you reorder them and pin the ones you use most to this bar. The steps that follow point at the tools inside it.'
+    },
+    {
       target: '[data-tour="play"]',
       title: 'Try it in the game',
       text: 'Copies the pack into a world\'s datapacks folder. Open the world, run /reload, and look for your girl. For scenes, the Simulate button on a scene file plays it right here first.'

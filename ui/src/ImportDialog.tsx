@@ -92,7 +92,13 @@ export function ImportDialog({ onImported, onClose }: { onImported: (result: Imp
   };
 
   const browsePack = async () => {
-    const picked = (await pickFolder('Choose the old resource pack (a folder; for a zip, type its path)')) ?? '';
+    const picked = (await pickFolder('Choose the old resource pack folder')) ?? '';
+
+    if (picked) await look(picked);
+  };
+
+  const browsePackZip = async () => {
+    const picked = (await pickFile('Choose the old resource pack (.zip)', ['zip'])) ?? '';
 
     if (picked) await look(picked);
   };
@@ -156,10 +162,22 @@ export function ImportDialog({ onImported, onClose }: { onImported: (result: Imp
     });
   };
 
-  const browseProfilesFolder = async () => {
-    const picked = await pickFolder("Choose the folder with the old girls' profiles (one .json for each girl)");
+  /* With one girl in the pack her profile is one file, so it is asked for as a file; with several, a folder holding one for each. */
+  const onlyGirl = Object.keys(girls).length === 1 ? Object.keys(girls)[0] : null;
 
-    if (picked) await lookForProfiles(picked);
+  const useProfilePath = async (path: string) => {
+    if (onlyGirl && (path.trim() === '' || /\.json$/i.test(path.trim()))) {
+      setProfilesFolder(path);
+      setGirl(onlyGirl, { profile: path.trim() });
+    } else await lookForProfiles(path);
+  };
+
+  const browseProfilesFolder = async () => {
+    const picked = onlyGirl
+      ? await pickFile(`Choose ${onlyGirl}'s old profile (.json)`, ['json'])
+      : await pickFolder("Choose the folder with the old girls' profiles (one .json for each girl)");
+
+    if (picked) await useProfilePath(picked);
   };
 
   const browseProfile = async (id: string | null) => {
@@ -242,13 +260,14 @@ export function ImportDialog({ onImported, onClose }: { onImported: (result: Imp
                 <label>Old resource pack <span class="muted">(folder or zip)</span></label>
                 <div class="row">
                   <input class="input grow" value={pack} placeholder="C:\...\resourcepacks\Amber" onInput={e => void look((e.target as HTMLInputElement).value)} />
-                  <button class="btn" onClick={browsePack}>Browse…</button>
+                  <button class="btn" onClick={browsePack}>Folder…</button>
+                  <button class="btn" onClick={browsePackZip}>Zip…</button>
                 </div>
               </div>
               <div class="field">
-                <label>Old profiles <span class="muted">(optional, one file per girl)</span></label>
+                <label>{onlyGirl ? 'Old profile' : 'Old profiles'} <span class="muted">{onlyGirl ? '(optional, her .json file)' : '(optional, one file per girl)'}</span></label>
                 <div class="row">
-                  <input class="input grow" value={profilesFolder} disabled={!haveGirls} placeholder={haveGirls ? 'C:\\...\\config\\pleasurehorizons\\girl' : 'Open a pack first'} onInput={e => void lookForProfiles((e.target as HTMLInputElement).value)} />
+                  <input class="input grow" value={profilesFolder} disabled={!haveGirls} placeholder={haveGirls ? (onlyGirl ? 'C:\\...\\config\\pleasurehorizons\\girl\\amber.json' : 'C:\\...\\config\\pleasurehorizons\\girl') : 'Open a pack first'} onInput={e => void useProfilePath((e.target as HTMLInputElement).value)} />
                   <button class="btn" disabled={!haveGirls} onClick={browseProfilesFolder}>Browse…</button>
                 </div>
               </div>

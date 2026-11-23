@@ -634,6 +634,12 @@ fn bundled_bed() -> Reply<BundledModel> {
     Ok(BundledModel { model, texture: format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(include_bytes!("../resources/girl_bed.png"))) })
 }
 
+/// The game's armour texture (the atlas every armour model is painted on), as a data URL.
+#[tauri::command(async)]
+fn bundled_armour_texture() -> String {
+    format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(include_bytes!("../resources/armor.png")))
+}
+
 /// The base mod's male model, which every scene of the new layout plays together with the girl.
 #[tauri::command(async)]
 fn bundled_male() -> pc_core::strut_model::Model {
@@ -943,10 +949,14 @@ fn read_game_log(app: State<App>, path: String) -> Reply<GameLogView> {
 
 /// What the viewer needs around one model or animation file: the girl it is for, her models, her texture and her animation files in this pack.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ViewerFiles {
     id: String,
     models: Vec<String>,
     texture: Option<String>,
+    /// Her armour models (one for each slot) and the armour texture the pack has, if it has one.
+    armour: Vec<String>,
+    armour_texture: Option<String>,
     animations: Vec<String>,
 }
 
@@ -957,7 +967,10 @@ fn viewer_files(app: State<App>, rel: String) -> Reply<ViewerFiles> {
     let (root, _) = app.open()?;
     let name = rel.rsplit('/').next().unwrap_or("");
     let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(name);
-    let id = if rel.contains("/strut/models/") {
+    let armour = rel.contains("/strut/models/armour/");
+    let id = if armour {
+        rel.rsplit('/').nth(1).unwrap_or(stem).to_string()
+    } else if rel.contains("/strut/models/") {
         stem.to_string()
     } else if let Some((_, girl)) = stem.rsplit_once('-') {
         girl.to_string()
@@ -977,7 +990,8 @@ fn viewer_files(app: State<App>, rel: String) -> Reply<ViewerFiles> {
         models.extend(files.iter().filter(|f| f.ends_with(&wanted) || f.ends_with(&old)).cloned());
     }
 
-    let texture = files.iter().find(|f| f.ends_with(&format!("/textures/entities/{id}.png"))).cloned();
+    /* Armour is painted on the armour atlas, not on the girl's skin: the pack's own, or the game's (the viewer has that built in). */
+    let texture = if armour { files.iter().find(|f| f.ends_with("/textures/armor/armor.png")).cloned() } else { files.iter().find(|f| f.ends_with(&format!("/textures/entities/{id}.png"))).cloned() };
     let animations: Vec<String> = files
         .iter()
         .filter(|f| in_sync(f, "/strut/animations/") && f.ends_with(".strutanim"))
@@ -989,32 +1003,10 @@ fn viewer_files(app: State<App>, rel: String) -> Reply<ViewerFiles> {
         .cloned()
         .collect();
 
-    Ok(ViewerFiles { id: id.clone(), models, texture, animations })
-}
+    let armour: Vec<String> = if armour { Vec::new() } else { files.iter().filter(|f| f.contains(&format!("/strut/models/armour/{id}/")) && f.ends_with(".strutmodel")).cloned().collect() };
+    let armour_texture = files.iter().find(|f| f.ends_with("/textures/armor/armor.png")).cloned();
 
-/// Fixes the lower arms of a model that are built with a rotated bone (see `pc_core::arm_fix`). With `apply` false it only says what it would do; with it true the model is
-/// changed, after a copy of the original is kept in the project's own `.packcreator/backups` folder (never exported).
-#[tauri::command(async)]
-fn fix_arms(app: State<App>, rel: String, apply: bool) -> Reply<pc_core::arm_fix::Report> {
-    let (root, _) = app.open()?;
-    let bytes = fs_ops::read_bytes(&root, &rel, 64 * 1024 * 1024).map_err(text)?;
-    let (edited, report) = pc_core::arm_fix::fix(&bytes).map_err(|e| format!("{rel} was not changed: {e}"))?;
-
-    if !apply || (report.fixed.is_empty() && report.removed.is_empty()) {
-        return Ok(report);
-    }
-
-    /* What is written must read back, and nothing but the arms may have moved: a model the game cannot read is never left behind. */
-    pc_core::strut_model::read(&edited).map_err(|e| format!("{rel} was not changed: the fixed model did not read back ({e})"))?;
-
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    let folder = root.join(project::META_DIR).join("backups").join(rel.replace(['/', '\\', ':'], "~"));
-
-    std::fs::create_dir_all(&folder).map_err(text)?;
-    std::fs::write(folder.join(format!("{stamp}.strutmodel")), &bytes).map_err(text)?;
-    fs_ops::write_bytes(&root, &rel, &edited).map_err(text)?;
-
-    Ok(report)
+    Ok(ViewerFiles { id: id.clone(), models, texture, armour, armour_texture, animations })
 }
 
 /// The skeleton id every model and animation file of the pack should have, and the grouping of them. `choices` maps a girl or skeleton to an id a person picked instead.
@@ -1040,6 +1032,22 @@ fn split_scenes(app: State<App>, apply: bool) -> Reply<pc_core::pack_split::Repo
     let (root, _) = app.open()?;
 
     pc_core::migrate::update(&root, apply).map_err(text)
+}
+
+/// What can be fixed in the models of the pack (see `pc_core::model_fixes`).
+#[tauri::command(async)]
+fn model_fixes_scan(app: State<App>) -> Reply<Vec<pc_core::model_fixes::Item>> {
+    let (root, _) = app.open()?;
+
+    Ok(pc_core::model_fixes::scan(&root))
+}
+
+/// Applies the chosen fixes, keeping what they replace so they can be undone with `undo_split_scenes`.
+#[tauri::command(async)]
+fn model_fixes_apply(app: State<App>, chosen: Vec<pc_core::model_fixes::Selection>) -> Reply<pc_core::model_fixes::Outcome> {
+    let (root, _) = app.open()?;
+
+    pc_core::model_fixes::apply(&root, &chosen).map_err(text)
 }
 
 /// Whether the pack is in an older format than this tool writes, and what updating it would do.
@@ -1072,6 +1080,60 @@ fn delete_clips(app: State<App>, rel: String, clips: Vec<String>) -> Reply<Vec<p
     std::fs::create_dir_all(&folder).map_err(text)?;
     std::fs::write(folder.join(format!("{stamp}.strutanim")), &bytes).map_err(text)?;
     fs_ops::write_bytes(&root, &rel, &edited).map_err(text)?;
+
+    Ok(left)
+}
+
+/// Renames clips of an animation file (`renames` is old name, new name). A copy of the file as it was is kept in the project's backups, and a scene layout that lists a clip under
+/// its old name is changed to the new one, so the scene keeps finding it.
+#[tauri::command(async)]
+fn rename_clips(app: State<App>, rel: String, renames: Vec<(String, String)>) -> Reply<Vec<pc_core::strut_anim::Clip>> {
+    let (root, _) = app.open()?;
+    let bytes = fs_ops::read_bytes(&root, &rel, 64 * 1024 * 1024).map_err(text)?;
+    let edited = pc_core::strut_anim::rename_clips(&bytes, &renames).map_err(|e| format!("{rel} was not changed: {e}"))?;
+    let left = pc_core::strut_anim::read(&edited).map_err(|e| format!("{rel} was not changed: the file did not read back ({e})"))?;
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let folder = root.join(project::META_DIR).join("backups").join(rel.replace(['/', '\\', ':'], "~"));
+
+    std::fs::create_dir_all(&folder).map_err(text)?;
+    std::fs::write(folder.join(format!("{stamp}.strutanim")), &bytes).map_err(text)?;
+    fs_ops::write_bytes(&root, &rel, &edited).map_err(text)?;
+
+    /* A layout names its clips: follow the rename. */
+    for layout in check::walk(&root).into_iter().filter(|f| f.contains("/strut/scenes/") && f.ends_with(".strutscene")) {
+        let Some(mut json) = std::fs::read_to_string(root.join(&layout)).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()) else { continue };
+        let mut changed = false;
+
+        if let Some(clips) = json.get_mut("clips").and_then(|c| c.as_object_mut()) {
+            for (old, new) in &renames {
+                if let Some(mut entry) = clips.remove(old) {
+                    let name = new.trim().to_string();
+
+                    /* The phase, variant and side come from the name, as the game reads them; an intro plays once. */
+                    if let (Some((phase, side, variant)), Some(object)) = (pc_core::layers::clip_parts(&name), entry.as_object_mut()) {
+                        object.insert("phase".into(), serde_json::json!(phase));
+                        object.insert("variant".into(), serde_json::json!(variant));
+
+                        match side {
+                            Some(side) => object.insert("side".into(), serde_json::json!(side)),
+                            None => object.remove("side"),
+                        };
+
+                        if phase == "intro" || phase == "solo_intro" {
+                            object.insert("loop".into(), serde_json::json!("once"));
+                        }
+                    }
+
+                    clips.insert(name, entry);
+                    changed = true;
+                }
+            }
+        }
+
+        if changed {
+            let _ = fs_ops::write_bytes(&root, &layout, (serde_json::to_string_pretty(&json).unwrap_or_default() + "\n").as_bytes());
+        }
+    }
 
     Ok(left)
 }
@@ -1247,9 +1309,21 @@ async fn register_actors(app: State<'_, App>, girls: Vec<String>, with_pack: boo
 #[tauri::command]
 async fn open_in_blockbench(app: State<'_, App>, model: String, texture: Option<String>, animation: Option<String>) -> Reply<()> {
     let (root, _) = app.open()?;
+    /* Armour with no armour texture in the pack opens on the game's, written next to the Blockbench files. */
+    let texture = match texture {
+        Some(t) => Some(fs_ops::resolve(&root, &t).map_err(text)?),
+        None if model.contains("/strut/models/armour/") => {
+            let path = blockbench::data_dir().join("armor.png");
+
+            std::fs::create_dir_all(blockbench::data_dir()).map_err(text)?;
+            std::fs::write(&path, include_bytes!("../resources/armor.png")).map_err(text)?;
+            Some(path)
+        }
+        None => None,
+    };
     let job = blockbench::Job {
         model: fs_ops::resolve(&root, &model).map_err(text)?,
-        texture: texture.map(|t| fs_ops::resolve(&root, &t)).transpose().map_err(text)?,
+        texture,
         animation: animation.map(|a| fs_ops::resolve(&root, &a)).transpose().map_err(text)?,
     };
 
@@ -1720,7 +1794,9 @@ fn main() {
             stamps,
             read_image,
             write_file,
-            fix_arms,
+            bundled_armour_texture,
+            model_fixes_scan,
+            model_fixes_apply,
             skeleton_plan,
             skeleton_apply,
             split_scenes,
@@ -1745,6 +1821,7 @@ fn main() {
             add_basic_physics,
             read_animation,
             delete_clips,
+            rename_clips,
             scene_scopes,
             scene_make_skeleton_wide,
             scene_make_girl_specific,

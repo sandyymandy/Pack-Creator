@@ -20,6 +20,8 @@ const PATHS: Record<string, ComponentChildren> = {
   scope: <><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.4-3.4 2.5-5.2 5.5-5.2s5.1 1.8 5.5 5.2" /><circle cx="17" cy="9" r="2.4" /><path d="M16.5 14.2c2.4.1 3.9 1.6 4.3 4" /></>,
   rig: <><circle cx="7" cy="6" r="2.2" /><circle cx="17.5" cy="9" r="2.2" /><circle cx="10" cy="18" r="2.2" /><path d="M9.2 6.5 15.3 8.5M16.4 11l-5 5.2M8.2 8 9.3 15.9" /></>,
   split: <path d="M3.5 12H9m0 0 5-6h6M9 12l5 6h6M17 3.5 20.5 6 17 8.5M17 15.5l3.5 2.5-3.5 2.5" />,
+  wrench: <path d="M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z" />,
+  dots: <><circle cx="5.5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="18.5" cy="12" r="1.3" /></>,
   collapse: <path d="M5 9.5h14M5 14.5h14M9 5l3 3 3-3M9 19l3-3 3 3" />
 };
 

@@ -584,6 +584,72 @@ pub fn remove_clips(bytes: &[u8], names: &[String]) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
+/// Writes the file again with clips under other names (`renames` is old name, new name). The new names are added to the end of the string table and the clips are pointed at
+/// them, so a name that is also used as something else in the file (a cue's text, a bone) is not changed there. Everything else is copied byte for byte.
+pub fn rename_clips(bytes: &[u8], renames: &[(String, String)]) -> Result<Vec<u8>, String> {
+    let parsed = parse(bytes)?;
+
+    for (old, new) in renames {
+        if !parsed.clips.iter().any(|c| &c.name == old) {
+            return Err(format!("this animation file has no clip called \"{old}\""));
+        }
+
+        if new.trim().is_empty() || new.len() > 0xFFFF {
+            return Err(format!("\"{old}\" cannot be renamed to nothing"));
+        }
+    }
+
+    let after: Vec<String> = parsed.clips.iter().map(|c| renames.iter().find(|(old, _)| *old == c.name).map_or(c.name.clone(), |(_, new)| new.trim().to_string())).collect();
+
+    for (i, name) in after.iter().enumerate() {
+        if after.iter().skip(i + 1).any(|other| other == name) {
+            return Err(format!("two clips would be called \"{name}\""));
+        }
+    }
+
+    let mut strings = parsed.strings.clone();
+    let first = parsed.spans.first().map(|s| s.start).ok_or("the file has no clips")?;
+    let mut body = bytes[first..].to_vec();
+
+    for (i, clip) in parsed.clips.iter().enumerate() {
+        if after[i] == clip.name {
+            continue;
+        }
+
+        let index = match strings.iter().position(|s| *s == after[i]) {
+            Some(at) => at,
+            None => {
+                strings.push(after[i].clone());
+                strings.len() - 1
+            }
+        };
+
+        let at = parsed.spans[i].start - first;
+
+        body[at..at + 2].copy_from_slice(&(index as u16).to_le_bytes());
+    }
+
+    let mut table: Vec<u8> = Vec::new();
+
+    for value in &strings {
+        table.extend_from_slice(&(value.len() as u16).to_le_bytes());
+        table.extend_from_slice(value.as_bytes());
+    }
+
+    let mut out: Vec<u8> = Vec::with_capacity(HEADER_BYTES + table.len() + body.len());
+
+    out.extend_from_slice(MAGIC);
+    out.extend_from_slice(&parsed.version_and_flags);
+    out.extend_from_slice(&(strings.len() as u16).to_le_bytes());
+    out.extend_from_slice(&(table.len() as u32).to_le_bytes());
+    out.extend_from_slice(&(parsed.clips.len() as u16).to_le_bytes());
+    out.extend_from_slice(&parsed.fingerprint_and_rest);
+    out.extend_from_slice(&table);
+    out.extend_from_slice(&body);
+    read(&out).map_err(|e| format!("the renamed file did not read back: {e}"))?;
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -777,5 +843,26 @@ mod vocab {
         }
         println!("TOKENS {}", unbound.iter().cloned().collect::<Vec<_>>().join(" "));
         println!("BOUNDCOUNT {}", bound.len());
+    }
+}
+
+#[cfg(test)]
+mod rename_probe {
+    /// `RENAME_FILE=<a .strutanim> cargo test -p pc_core --lib -- --ignored --nocapture rename_a_file`
+    #[test]
+    #[ignore]
+    fn rename_a_file() {
+        let bytes = std::fs::read(std::env::var("RENAME_FILE").unwrap()).unwrap();
+        let before = super::read(&bytes).unwrap();
+        let renames: Vec<(String, String)> = before.iter().map(|c| (c.name.clone(), format!("animation.{}", c.name.replace(".start", ".intro")))).collect();
+        let out = super::rename_clips(&bytes, &renames).unwrap();
+        let after = super::read(&out).unwrap();
+
+        for (a, b) in before.iter().zip(&after) {
+            println!("PROBE {} -> {} ({} channels, {} events, {} s)", a.name, b.name, b.channels.len(), b.events.len(), b.duration);
+            assert_eq!(a.channels.len(), b.channels.len());
+            println!("PROBE targets {:?}", a.channels.iter().map(|c| c.target.clone()).filter(|t| ["steve", "Torso2", "Head2", "cock", "nut", "shaft", "RightArm", "LeftLeg"].contains(&t.as_str())).collect::<Vec<_>>());
+            assert_eq!(a.events.len(), b.events.len());
+        }
     }
 }

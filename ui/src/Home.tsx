@@ -19,7 +19,7 @@ function ago(seconds: number): string {
   return new Date(seconds * 1000).toLocaleDateString();
 }
 
-export function Home({ onNew, onOpen, onOpenFolder }: { onNew: () => void; onOpen: (path: string) => void; onOpenFolder: () => void }) {
+export function Home({ onNew, onNewFromGirls, onOpen, onOpenFolder }: { onNew: () => void; onNewFromGirls: () => void; onOpen: (path: string) => void; onOpenFolder: () => void }) {
   const [recent, setRecent] = useState<RecentView[] | null>(null);
   const [docs, setDocs] = useState<string | null>(null);
   const [touring, setTouring] = useState(false);
@@ -59,6 +59,7 @@ export function Home({ onNew, onOpen, onOpenFolder }: { onNew: () => void; onOpe
 
         <div class="home-actions">
           <button class="btn primary" data-tour="home-new" onClick={onNew}>New project</button>
+          <button class="btn" data-tour="home-import" title="Make a project and bring old girls in from their resource packs straight away" onClick={onNewFromGirls}>New project from old girls</button>
           <button class="btn" data-tour="home-open" onClick={onOpenFolder}>Open a folder</button>
           <button class="btn" data-tour="home-docs" onClick={() => setDocs('')}>Documentation</button>
           <button class="btn" onClick={() => setTouring(true)}>Take the tour</button>

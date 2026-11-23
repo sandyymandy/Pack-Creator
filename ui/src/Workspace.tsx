@@ -3,6 +3,9 @@ import { api, pickFolder, pickSavePath } from './api';
 import { BlockbenchDialog } from './BlockbenchDialog';
 import { SkeletonDialog } from './SkeletonDialog';
 import { SplitDialog } from './SplitDialog';
+import { FixesDialog } from './FixesDialog';
+import { Dock } from './Dock';
+import { arrange, loadPrefs, type DockItem, type DockPrefs } from './dockState';
 import { DocsDialog } from './DocsDialog';
 import { GameLogDialog } from './GameLogDialog';
 import { HistoryDialog } from './HistoryDialog';
@@ -14,6 +17,7 @@ import { FileIcon } from './icons';
 import { GirlForm } from './GirlForm';
 import { DialogueForm } from './DialogueForm';
 import { SocialForm } from './SocialForm';
+import { WearerForm } from './WearerForm';
 import { ImageView } from './ImageView';
 import { TraitForm } from './TraitForm';
 import { SceneForm } from './SceneForm';
@@ -54,6 +58,7 @@ type Dialog =
   | { type: 'blockbench' }
   | { type: 'skeletons' }
   | { type: 'split' }
+  | { type: 'fixes' }
   | { type: 'gamelog' }
   | { type: 'docs'; start?: string }
   | { type: 'settings' }
@@ -109,7 +114,7 @@ function readView(): 'form' | 'json' {
   }
 }
 
-export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => void }) {
+export function Workspace({ opened, onHome, startImport }: { opened: Opened; onHome: () => void; startImport?: boolean }) {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const tabStrip = useRef<HTMLDivElement>(null);
@@ -138,7 +143,7 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
   const sizesRef = useRef(sizes);
 
   sizesRef.current = sizes;
-  const [dialog, setDialog] = useState<Dialog>(null);
+  const [dialog, setDialog] = useState<Dialog>(startImport ? { type: 'import' } : null);
 
   /* A pack in an older format is offered its update as soon as it opens. */
   useEffect(() => { void api.migrationStatus().then(status => { if (status.needed) setDialog({ type: 'split' }); }).catch(() => undefined); }, []);
@@ -254,6 +259,21 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
 
   /* The scene simulator is a tab of its own for a scene file, named `simulate:<the scene file>`. */
   const located = (file: string): FileKind => (/\/girls\/[^/]+\.json$/.test(file) ? 'girl' : 'scene');
+
+  /* Her model in the viewer, from her girl file: the nude one, or the dressed one if that is all she has. */
+  const previewGirl = async (girlRel: string) => {
+    const id = girlRel.split('/').pop()?.replace(/\.json$/, '') ?? '';
+
+    try {
+      const found = await api.viewerFiles(`data/x/asset_sync/strut/models/entities/girls/nude/${id}.strutmodel`);
+      const model = found.models.find(m => m.includes('/nude/')) ?? found.models[0];
+
+      if (model) void openFile(model);
+      else notify(`${id} has no model in this pack yet.`);
+    } catch (error) {
+      notify(messageOf(error));
+    }
+  };
 
   const openSim = (sceneRel: string) => {
     const rel = 'simulate:' + sceneRel;
@@ -392,7 +412,7 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
   }, [version]);
 
   const activeTab = tabs.find(t => t.rel === active);
-  const FORM_KINDS: FileKind[] = ['girl', 'scene', 'trait', 'dialogue', 'social'];
+  const FORM_KINDS: FileKind[] = ['girl', 'scene', 'trait', 'dialogue', 'social', 'armour_wearer'];
   const formShown = activeTab?.view === 'text' && FORM_KINDS.includes(activeTab.kind) && view === 'form';
 
   /* The form shows the file's text as it is now, and follows every change to it. */
@@ -528,6 +548,7 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
       }
 
       /* Ctrl+Shift+F searches every file; Ctrl+Tab goes to the next tab and Ctrl+Shift+Tab to the one before. */
+      if (key === 'j') { event.preventDefault(); setDockOpen(open => !open); return; }
       if (key === 'f' && event.shiftKey) { event.preventDefault(); setDialog({ type: 'search' }); return; }
 
       if (event.key === 'Tab' && tabsRef.current.length > 1) {
@@ -808,6 +829,8 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
 
   /* The tour opens by itself the first time a project is opened, and after that only when asked for. Skipping it also silences the one on the home page. */
   const [touring, setTouring] = useState(false);
+  const [dockOpen, setDockOpen] = useState(false);
+  const [dockPrefs, setDockPrefs] = useState<DockPrefs>(loadPrefs);
 
   useEffect(() => {
     if (tourSeen('workspace')) return;
@@ -844,6 +867,21 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
   const tab = tabs.find(t => t.rel === active);
   const showEditor = tab?.view === 'text';
 
+  const dockItems: DockItem[] = [
+    { id: 'play', icon: 'play', label: 'Try in a world', desc: 'Copy the pack into a world to test it in the game', group: 'Pack', tour: 'play', run: () => void tryInWorld() },
+    { id: 'export', icon: 'export', label: 'Export as zip', desc: 'Write the pack as a zip to share', group: 'Pack', tour: 'export', run: () => void exportZip() },
+    { id: 'update', icon: 'split', label: 'Update the pack', desc: 'One model per participant, in place (can be undone)', group: 'Pack', tour: 'update', run: () => setDialog({ type: 'split' }) },
+    { id: 'fixes', icon: 'wrench', label: 'Fix the models', desc: 'Armour, arms and the old male rig: apply all or pick', group: 'Pack', tour: 'fixes', run: () => setDialog({ type: 'fixes' }) },
+    { id: 'import', icon: 'import', label: 'Import an old girl', desc: 'From her resource pack (folder or zip) or profile', group: 'Girls and scenes', tour: 'import', run: () => setDialog({ type: 'import' }) },
+    { id: 'scope', icon: 'scope', label: 'Who each scene is for', desc: 'One girl, or every girl on a skeleton', group: 'Girls and scenes', tour: 'scope', run: () => setDialog({ type: 'scope' }) },
+    { id: 'rig', icon: 'rig', label: 'Skeleton ids', desc: 'Which rig each model and animation file is made for', group: 'Girls and scenes', tour: 'rig', run: () => setDialog({ type: 'skeletons' }) },
+    { id: 'blockbench', icon: 'cube', label: 'Blockbench', desc: 'Install it, or open it with the Strut Toolkit', group: 'Models and Blockbench', tour: 'blockbench', run: () => setDialog({ type: 'blockbench' }) },
+    { id: 'log', icon: 'log', label: 'Game log', desc: 'What the game said about this pack on its last run', group: 'Help', tour: 'log', run: () => setDialog({ type: 'gamelog' }) },
+    { id: 'docs', icon: 'docs', label: 'Documentation', desc: 'How girls, scenes, traits, dialogue and assets work (F1)', group: 'Help', tour: 'docs', run: () => setDialog({ type: 'docs' }) },
+    { id: 'tour', icon: 'help', label: 'Take the tour', desc: 'A short walk round this window', group: 'Help', tour: 'tour', run: () => setTouring(true) }
+  ];
+  const pinnedItems = arrange(dockItems, dockPrefs).filter(item => dockPrefs.pinned.includes(item.id));
+
   return (
     <div class="workspace">
       <div class="topbar">
@@ -855,18 +893,10 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
         <IconButton tour="quick" icon="search" tip="Open a file by name (Ctrl+P)" onClick={() => setDialog({ type: 'quick' })} />
         <IconButton tour="find" icon="find" tip="Find and replace in all files (Ctrl+Shift+F)" onClick={() => setDialog({ type: 'search' })} />
         <span class="bar-sep" />
-        <IconButton tour="play" icon="play" tip="Try in a world: copy the pack into a world to test it in the game" onClick={() => void tryInWorld()} />
-        <IconButton tour="export" icon="export" tip="Export the pack as a zip to share" onClick={() => void exportZip()} />
-        <IconButton tour="scope" icon="scope" tip="Who each scene is for: one girl, or every girl on a skeleton" onClick={() => setDialog({ type: 'scope' })} />
-        <IconButton tour="rig" icon="rig" tip="Skeleton ids: which rig each model and animation file is made for" onClick={() => setDialog({ type: 'skeletons' })} />
-        <IconButton tour="update" icon="split" tip="Update the pack: one model per participant, in place (can be undone)" onClick={() => setDialog({ type: 'split' })} />
-        <IconButton tour="import" icon="import" tip="Import an old girl from her resource pack or profile" onClick={() => setDialog({ type: 'import' })} />
         <span class="bar-sep" />
-        <IconButton tour="blockbench" icon="cube" tip="Blockbench: install it or open it with the Strut Toolkit" onClick={() => setDialog({ type: 'blockbench' })} />
-        <IconButton tour="log" icon="log" tip="Game log: what the game said about this pack on its last run" onClick={() => setDialog({ type: 'gamelog' })} />
-        <IconButton tour="docs" icon="docs" tip="Documentation: how girls, scenes, traits, dialogue and assets work (F1)" onClick={() => setDialog({ type: 'docs' })} />
-        <IconButton tour="tour" icon="help" tip="Take the tour: a short walk round this window" onClick={() => setTouring(true)} />
-        <span class="bar-sep" />
+        {pinnedItems.map(item => <IconButton key={item.id} icon={item.icon} tip={`${item.label}: ${item.desc}`} onClick={item.run} />)}
+        {pinnedItems.length > 0 && <span class="bar-sep" />}
+        <IconButton tour="dock" icon="dots" tip="Tools: every tool with its name (Ctrl+J). Customize it there" onClick={() => setDockOpen(open => !open)} />
         <IconButton tour="settings" icon="settings" tip="Settings" onClick={() => setDialog({ type: 'settings' })} />
         <IconButton icon={side === 'left' ? 'sideLeft' : 'sideRight'} tip={`File tree: on the ${side}. Click to move it to the ${side === 'left' ? 'right' : 'left'}`} onClick={setSideAndRemember} />
       </div>
@@ -904,7 +934,7 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
 
           {tab?.view === 'text' && (
             <div class="viewbar">
-              {['girl', 'scene', 'trait', 'dialogue', 'social'].includes(tab.kind) && (
+              {['girl', 'scene', 'trait', 'dialogue', 'social', 'armour_wearer'].includes(tab.kind) && (
                 <>
                   <button class={'seg' + (view === 'form' ? ' on' : '')} onClick={() => chooseView('form')}>Form</button>
                   <button class={'seg' + (view === 'json' ? ' on' : '')} onClick={() => chooseView('json')}>JSON</button>
@@ -912,6 +942,7 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
               )}
               <span class="grow" />
               <button class="btn ghost small" title="Tidy the file's layout (Shift+Alt+F)" onClick={() => void editor.current?.getAction('editor.action.formatDocument')?.run()}>Format</button>
+              {tab.kind === 'girl' && <button class="btn small" title="See her model in the viewer, with her animations" onClick={() => void previewGirl(tab.rel)}>▶ Preview</button>}
               {tab.kind === 'scene' && <button class="btn small" title="Play this scene as the game does: strip, bed, join, thrust, cues" onClick={() => openSim(tab.rel)}>▶ Simulate</button>}
               <button class="btn ghost small" title="Earlier versions of this file" onClick={() => setDialog({ type: 'history', rel: tab.rel })}>History…</button>
             </div>
@@ -922,6 +953,9 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
 
             {formShown && reference && activeTab?.kind === 'girl' && (
               <GirlForm text={liveText} reference={reference} packTraits={packTraits} onChange={writeFromForm} onShowJson={() => chooseView('json')} />
+            )}
+            {formShown && activeTab?.kind === 'armour_wearer' && (
+              <WearerForm rel={activeTab.rel} text={liveText} onChange={writeFromForm} onShowJson={() => chooseView('json')} />
             )}
             {formShown && reference && activeTab?.kind === 'trait' && (
               <TraitForm text={liveText} reference={reference} onChange={writeFromForm} onShowJson={() => chooseView('json')} />
@@ -1032,8 +1066,10 @@ export function Workspace({ opened, onHome }: { opened: Opened; onHome: () => vo
       {dialog?.type === 'search' && <SearchDialog onClose={() => setDialog(null)} onOpen={(rel, at) => void openFile(rel, at)} onReplaced={changed} />}
       {dialog?.type === 'settings' && <SettingsDialog onClose={() => setDialog(null)} onResetLayout={() => { const next = { ...DEFAULT_SIZES }; setSizes(next); saveSizes(next); }} />}
       {dialog?.type === 'docs' && <DocsDialog start={dialog.start} onClose={() => setDialog(null)} onTour={() => { setDialog(null); setTouring(true); }} />}
+      <Dock open={dockOpen || touring} items={dockItems} prefs={dockPrefs} onPrefs={setDockPrefs} onClose={() => setDockOpen(false)} />
       {touring && <Tour steps={workspaceSteps(page => { endTour(false); setDialog({ type: 'docs', start: page }); })} onDone={() => endTour(false)} onSkip={() => endTour(true)} />}
       {dialog?.type === 'gamelog' && <GameLogDialog onClose={() => setDialog(null)} onOpen={rel => void openFile(rel)} />}
+      {dialog?.type === 'fixes' && <FixesDialog onClose={() => setDialog(null)} />}
       {dialog?.type === 'split' && <SplitDialog onClose={() => setDialog(null)} />}
       {dialog?.type === 'skeletons' && <SkeletonDialog onClose={() => setDialog(null)} />}
       {dialog?.type === 'blockbench' && <BlockbenchDialog onClose={() => setDialog(null)} />}

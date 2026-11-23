@@ -53,6 +53,33 @@ struct GirlModel {
     namespace: String,
     bytes: Vec<u8>,
     model: Model,
+    /// The model no longer has the male's rig and the old one was added to this copy of it, for the proof only: nothing is stripped from the file.
+    grafted: bool,
+}
+
+/// The old male rig (`steve` and every bone under it), as the old mod's models carried it. Used to convert scenes whose girl's model has already lost it.
+const OLD_RIG: &[u8] = include_bytes!("../resources/old_male_rig.strutmodel");
+
+/// The girl's model with the old rig added, so the scene files written for the two together can be split and proven. None when a bone of the rig has the name of one of hers.
+fn grafted(girl: &Model) -> Option<Model> {
+    let rig = strut_model::read(OLD_RIG).ok()?;
+
+    if rig.group_bones.iter().any(|b| girl.group_bones.iter().any(|g| g.name == b.name)) {
+        return None;
+    }
+
+    let offset = girl.group_bones.len() as i16;
+    let mut model = girl.clone();
+
+    for bone in &rig.group_bones {
+        let mut bone = bone.clone();
+
+        bone.parent_index = if bone.parent_index < 0 { -1 } else { bone.parent_index + offset };
+        bone.elements.clear();
+        model.group_bones.push(bone);
+    }
+
+    Some(model)
 }
 
 /// The model without the male's rig, with its skeleton id set. Everything else (bones, cubes, meshes, skinning, textures, other extension sections) is carried over byte for
@@ -99,6 +126,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
 
     /* The girls' models that carry the male. */
     let mut models: Vec<GirlModel> = Vec::new();
+    let mut bare: Vec<GirlModel> = Vec::new();
 
     for rel in &files {
         let parts: Vec<&str> = rel.split('/').collect();
@@ -111,12 +139,29 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
         let Ok(model) = strut_model::read(&bytes) else { continue };
 
         if model.group_bones.iter().any(|b| b.name == MALE_ROOT && b.parent_index < 0) {
-            models.push(GirlModel { rel: rel.clone(), stem: parts[parts.len() - 1].trim_end_matches(".strutmodel").to_string(), namespace: parts[1].to_string(), bytes, model });
+            models.push(GirlModel { rel: rel.clone(), stem: parts[parts.len() - 1].trim_end_matches(".strutmodel").to_string(), namespace: parts[1].to_string(), bytes, model, grafted: false });
+        } else if let Some(model) = grafted(&model) {
+            bare.push(GirlModel { rel: rel.clone(), stem: parts[parts.len() - 1].trim_end_matches(".strutmodel").to_string(), namespace: parts[1].to_string(), bytes, model, grafted: true });
         }
+    }
+
+    /* Scene files still in the old layout (one file for the girl and the male) whose girls' models have already lost the rig: the old rig is put back on a copy of the model so they can be converted. */
+    let old_layout = files.iter().any(|rel| rel.split('/').count() == 7 && rel.contains("/strut/animations/scenes/") && rel.ends_with(".strutanim"));
+
+    if models.is_empty() && old_layout {
+        models = bare;
     }
 
     if models.is_empty() {
         report.findings.push("No scenes need splitting: no model carries the old male rig (steve).".into());
+
+        /* A scene file in the old single-file layout whose girl's model has already lost the rig cannot be converted: the proof needs the rig's pivots. */
+        let stuck: Vec<String> = files.iter().filter(|rel| rel.contains("/strut/animations/scenes/") && rel.ends_with(".strutanim") && rel.rsplit('/').nth(1) == Some("scenes")).cloned().collect();
+
+        for rel in stuck {
+            report.skipped.push(format!("{rel} is still one file for the girl and the male, and her model no longer has the male's rig, so it cannot be split here. Import her again from her old pack (the import converts the scenes as it goes) or rebuild the scene in Blockbench's Strut Scenes."));
+        }
+
         return Ok(report);
     }
 
@@ -352,7 +397,7 @@ pub fn split_pack(root: &Path, apply: bool) -> Result<Report> {
 
     /* Strip the male from the girls' models, but only when every scene could be converted: a scene file left behind still needs it. */
     if report.skipped.is_empty() {
-        for m in &models {
+        for m in models.iter().filter(|m| !m.grafted) {
             let Some(id) = id_of(&m.stem) else { continue };
 
             match strip_male(&m.bytes, &m.model, &id) {
@@ -701,5 +746,46 @@ mod tests {
         }
 
         println!("took the id off {count} models");
+    }
+}
+
+#[cfg(test)]
+mod rig_probe {
+    use std::collections::HashSet;
+
+    /// Cuts the old male rig (`steve` and everything under it) out of an old geo file into `resources/old_male_rig.strutmodel`:
+    /// `OLD_RIG_GEO=<geo json> cargo test -p pc_core --lib -- --ignored --nocapture make_old_rig`
+    #[test]
+    #[ignore]
+    fn make_old_rig() {
+        let text = std::fs::read_to_string(std::env::var("OLD_RIG_GEO").unwrap()).unwrap();
+        let root: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let converted = crate::convert::model::convert_geo(&root, None);
+        let bytes = crate::convert::model::encode(&converted.model).unwrap();
+        let model = crate::strut_model::read(&bytes).unwrap();
+        let rig: HashSet<usize> = crate::scene_split::subtree(&model, "steve").into_iter().collect();
+        let gone: HashSet<usize> = (0..model.group_bones.len()).filter(|i| !rig.contains(i)).collect();
+        let out = crate::strut_model::remove_bones(&bytes, &gone).unwrap();
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/old_male_rig.strutmodel");
+
+        std::fs::write(&path, &out).unwrap();
+        println!("PROBE wrote {} bytes, {} bones", out.len(), rig.len());
+
+        /* The same rig in another model, to see whether it sits the same everywhere. */
+        if let Ok(other) = std::env::var("OLD_RIG_OTHER") {
+            let o = crate::strut_model::read(&std::fs::read(other).unwrap()).unwrap();
+            let mine = crate::strut_model::read(&out).unwrap();
+            let mut different = 0;
+
+            for b in &mine.group_bones {
+                match o.group_bones.iter().find(|x| x.name == b.name) {
+                    Some(x) if x.pivot == b.pivot && x.rotation == b.rotation => {}
+                    Some(x) => { different += 1; if different < 6 { println!("PROBE differs {} {:?} vs {:?}", b.name, b.pivot, x.pivot); } }
+                    None => { different += 1; if different < 6 { println!("PROBE missing {}", b.name); } }
+                }
+            }
+
+            println!("PROBE {different} of {} bones differ from the other model", mine.group_bones.len());
+        }
     }
 }

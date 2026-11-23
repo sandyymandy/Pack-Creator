@@ -3,6 +3,8 @@
 
 pub mod anim_split;
 pub mod arm_fix;
+pub mod armour;
+pub mod model_fixes;
 pub mod check;
 pub mod convert;
 pub mod diagnostics;

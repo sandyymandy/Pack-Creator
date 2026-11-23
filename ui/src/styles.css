@@ -575,3 +575,33 @@ details.more > summary { cursor: pointer; color: var(--muted); font-weight: 600;
 .update-banner { position: fixed; right: 16px; bottom: 42px; z-index: 70; width: 340px; padding: 12px 14px; border-radius: 10px; background: #232733; border: 1px solid #3a4157; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 6px; }
 .update-banner .update-notes { max-height: 120px; overflow: auto; white-space: pre-wrap; font-size: 12px; }
 .update-banner .update-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+
+/* The dock: every tool with its name, in a panel that slides in from the right. */
+.dock-backdrop { position: fixed; inset: 0; z-index: 60; background: transparent; }
+.dock { position: fixed; top: 0; right: 0; bottom: 0; z-index: 61; width: 360px; max-width: 92vw; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--border); box-shadow: -12px 0 32px #0006; transform: translateX(105%); transition: transform 0.18s ease; visibility: hidden; }
+.dock.open { transform: none; visibility: visible; }
+.dock-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.dock-head .spacer { flex: 1; }
+.dock-body { flex: 1; overflow: auto; padding: 6px 8px 12px; }
+.dock-group h3 { margin: 12px 6px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.dock-row { display: flex; align-items: center; gap: 4px; }
+.dock-item { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.dock-item:hover { background: var(--hover); }
+.dock-icon { display: inline-flex; color: var(--muted); }
+.dock-text { display: flex; flex-direction: column; min-width: 0; }
+.dock-label { font-weight: 500; }
+.dock-desc { font-size: 12px; color: var(--muted); white-space: normal; }
+.dock-edit { display: inline-flex; gap: 2px; }
+.dock-foot { padding: 8px 12px; border-top: 1px solid var(--border); }
+.btn.on { color: var(--accent); }
+
+/* The viewer's View menu: the drawing options in one panel instead of a long bar. */
+.viewer-info { margin-left: auto; }
+.view-menu { position: relative; }
+.view-backdrop { position: fixed; inset: 0; z-index: 40; }
+.view-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 41; min-width: 240px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 28px #0006; }
+.view-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.view-group { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+
+.form-section { margin: 12px 0; padding: 8px 12px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.form-section legend { padding: 0 6px; font-weight: 600; }

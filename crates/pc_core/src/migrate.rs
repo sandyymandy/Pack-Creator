@@ -61,8 +61,10 @@ pub struct Status {
 }
 
 /// Whether any model of the pack still carries the old male rig.
-fn has_old_male(root: &Path) -> bool {
+pub(crate) fn has_old_male(root: &Path) -> bool {
     crate::check::walk(root).iter().any(|rel| {
+        /* A scene still in one file for the girl and the male, even when her model lost the rig. */
+        (rel.split('/').count() == 7 && rel.contains("/strut/animations/scenes/") && rel.ends_with(".strutanim")) ||
         rel.ends_with(".strutmodel") && rel.contains("/strut/models/") && !rel.contains("/models/male/") && std::fs::read(root.join(rel)).ok().and_then(|b| crate::strut_model::read(&b).ok()).map_or(false, |m| m.group_bones.iter().any(|b| b.name == crate::scene_split::MALE_ROOT && b.parent_index < 0))
     })
 }
@@ -220,7 +222,7 @@ pub fn status(root: &Path, meta: &ProjectMeta) -> Status {
 
 /// Gives the animation files made for one girl's model (her base file and her scene files) the fingerprint of the model as it is now: once the old male rig is cut out of the
 /// model its bone names are fewer, and a file made before carries the hash of the old list.
-fn restamp(root: &Path) -> Result<usize> {
+pub(crate) fn restamp(root: &Path) -> Result<usize> {
     let mut models: BTreeMap<String, i32> = BTreeMap::new();
     let files = crate::check::walk(root);
 
@@ -301,6 +303,20 @@ pub fn update(root: &Path, apply: bool) -> Result<Report> {
             }
 
             report.files_written += 1;
+        }
+
+        /* Armour and the arms of what was imported or is still old, with the same undo. */
+        let fixes = crate::model_fixes::apply_all(root, &[])?;
+
+        report.findings.extend(fixes.notes);
+
+        if let Some(later) = fixes.stamp {
+            match &report.stamp {
+                Some(first) => crate::pack_split::chain(root, first, &later)?,
+                None => report.stamp = Some(later),
+            }
+
+            report.files_written += fixes.written.len();
         }
 
         let stamped = restamp(root)?;
@@ -482,5 +498,18 @@ mod tests {
         assert!(!dir.join("assets").exists(), "the emptied assets folder is removed");
         assert!(!status(&dir, &project::open(&dir).unwrap()).needed);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod update_probe {
+    /// `UPDATE_PACK=<a copy of a pack> cargo test -p pc_core --lib -- --ignored --nocapture update_a_copy`
+    #[test]
+    #[ignore]
+    fn update_a_copy() {
+        let root = std::path::PathBuf::from(std::env::var("UPDATE_PACK").unwrap());
+        let report = super::update(&root, true).unwrap();
+
+        println!("PROBE scenes={} written={:?} removed={:?} skipped={:?} findings={:?}", report.scenes, report.written, report.removed, report.skipped, report.findings);
     }
 }

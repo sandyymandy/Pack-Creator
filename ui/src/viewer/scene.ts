@@ -413,6 +413,8 @@ interface Bone {
 
 export interface Viewer {
   loadModel(model: ModelData, textureUrl: string | null, keepCamera?: boolean): void;
+  /** Armour worn by the loaded model: each piece is a model made on the same skeleton, drawn on its own texture and following the bones of the same name. Kept across model loads. */
+  setArmour(pieces: { model: ModelData; texture: string | null }[]): void;
   setClip(clip: ClipData | null): void;
   play(): void;
   pause(): void;
@@ -494,6 +496,73 @@ export function createViewer(container: HTMLElement): Viewer {
   const textureCache = new Map<string, THREE.Texture>();
   let rigMap: THREE.Texture | null = null;
   let bedGroup: THREE.Group | null = null;
+  let armourItems: { model: ModelData; texture: string | null }[] = [];
+  let armourParts: THREE.Object3D[] = [];
+
+  /** Hangs the armour pieces on the bones of the loaded model: a bone the model has carries the piece's cubes itself, and a bone it lacks (the armour's own) is made under its parent. */
+  function applyArmour(): void {
+    for (const part of armourParts) part.removeFromParent();
+
+    armourParts = [];
+
+    if (!root) return;
+
+    for (const item of armourItems) {
+      const m = item.model;
+      const unit = m.unitsPerBlock || 16;
+      const texture = m.textures[0] ?? { name: '', width: 64, height: 64, uvWidth: 64, uvHeight: 64 };
+      const material = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, transparent: true, alphaTest: 0.02 });
+      const nodes: THREE.Object3D[] = [];
+
+      if (item.texture) {
+        const url = item.texture;
+        const use = (loaded: THREE.Texture) => { material.map = loaded; material.needsUpdate = true; };
+        const cached = textureCache.get(url);
+
+        if (cached) use(cached);
+        else {
+          new THREE.TextureLoader().load(url, loaded => {
+            loaded.colorSpace = THREE.SRGBColorSpace;
+            loaded.magFilter = THREE.NearestFilter;
+            loaded.minFilter = THREE.NearestFilter;
+            textureCache.set(url, loaded);
+            use(loaded);
+          });
+        }
+      }
+
+      m.groupBones.forEach(bone => {
+        const girl = boneByName.get(bone.name);
+        let node: THREE.Object3D;
+
+        if (girl) {
+          node = girl.node;
+        } else {
+          const parent = bone.parentIndex >= 0 ? m.groupBones[bone.parentIndex] : null;
+
+          node = new THREE.Group();
+          node.position.set(...([0, 1, 2].map(i => (bone.pivot[i] - (parent ? parent.pivot[i] : 0)) / unit) as [number, number, number]));
+          setEuler(node, bone.rotation);
+          (bone.parentIndex >= 0 && nodes[bone.parentIndex] ? nodes[bone.parentIndex] : root!).add(node);
+          armourParts.push(node);
+        }
+
+        nodes.push(node);
+
+        for (const element of bone.elements) {
+          if (element.kind !== 1 || !m.cubes[element.index]) continue;
+
+          const cube = m.cubes[element.index];
+          const piece = new THREE.Mesh(buildCube(cube, texture, unit), material);
+
+          piece.position.set((cube.origin[0] - bone.pivot[0]) / unit, (cube.origin[1] - bone.pivot[1]) / unit, (cube.origin[2] - bone.pivot[2]) / unit);
+          setEuler(piece, cube.rotation);
+          node.add(piece);
+          armourParts.push(piece);
+        }
+      });
+    }
+  }
   let shading: Shading = 'lit';
   let brightness = 1;
   const pieces: THREE.Mesh[] = [];
@@ -615,7 +684,8 @@ export function createViewer(container: HTMLElement): Viewer {
     flat: new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, alphaTest: 0.02, color: 0xcccccc })
   };
 
-  const materialFor = (piece: THREE.Object3D) => (piece.userData.rig && rigMap && (shading === 'lit' || shading === 'flat') ? rigMaterials[shading] : materials[shading]);
+  /* Only the male's own body is drawn with the player's skin: not the items, cameras and armour that count as scene rig too (they would turn the girl's armour into skin). */
+  const materialFor = (piece: THREE.Object3D) => (piece.userData.male && rigMap && (shading === 'lit' || shading === 'flat') ? rigMaterials[shading] : materials[shading]);
 
   function refreshNormals(mesh: FreeMesh): void {
     const smooth = smoothing === 'smooth' || (smoothing === 'authored' && mesh.data.smooth);
@@ -688,7 +758,7 @@ export function createViewer(container: HTMLElement): Viewer {
   function applyShading(): void {
     const material = materials[shading];
 
-    for (const piece of pieces) piece.material = piece.userData.rig ? materialFor(piece) : material;
+    for (const piece of pieces) piece.material = piece.userData.male ? materialFor(piece) : material;
 
     rigMaterials.flat.color.setScalar(Math.min(1, 0.8 * brightness));
     ambient.intensity = 0.55 * brightness;
@@ -907,6 +977,7 @@ export function createViewer(container: HTMLElement): Viewer {
       }
 
       const rigBone: boolean[] = [];
+      const maleBone: boolean[] = [];
 
       model.groupBones.forEach(bone => {
         const node = new THREE.Group();
@@ -918,6 +989,7 @@ export function createViewer(container: HTMLElement): Viewer {
         node.name = bone.name;
         nodes.push(node);
         rigBone.push(isRigName(bone.name, bone.parentIndex < 0) || (bone.parentIndex >= 0 && rigBone[bone.parentIndex] === true));
+        maleBone.push(/^steve$/i.test(bone.name) || (bone.parentIndex >= 0 && maleBone[bone.parentIndex] === true));
         (bone.parentIndex >= 0 && nodes[bone.parentIndex] ? nodes[bone.parentIndex] : root!).add(node);
         bones.push({ name: bone.name, node, rigSelf: isRigName(bone.name, bone.parentIndex < 0), rest: { rotation: [...bone.rotation], offset } });
         boneByName.set(bone.name, bones[bones.length - 1]);
@@ -925,6 +997,7 @@ export function createViewer(container: HTMLElement): Viewer {
         for (const element of bone.elements) {
           const place = (piece: THREE.Mesh, origin: number[], rotation: number[]) => {
             piece.userData.rig = rigBone[rigBone.length - 1];
+            piece.userData.male = maleBone[maleBone.length - 1];
             pieces.push(piece);
             piece.position.set((origin[0] - bone.pivot[0]) / unit, (origin[1] - bone.pivot[1]) / unit, (origin[2] - bone.pivot[2]) / unit);
             setEuler(piece, rotation);
@@ -950,6 +1023,7 @@ export function createViewer(container: HTMLElement): Viewer {
 
               freeMeshes.push({ piece, data: free, positions, rest, pivot: pivotBlocks, armature: free.armatureIndex, corners });
               piece.userData.rig = rigBone[rigBone.length - 1];
+            piece.userData.male = maleBone[maleBone.length - 1];
               pieces.push(piece);
               node.add(piece);
             } else {
@@ -968,6 +1042,8 @@ export function createViewer(container: HTMLElement): Viewer {
       });
 
       scene.add(root);
+      armourParts = [];
+      applyArmour();
       applySmoothing();
       applyShading();
       applyRig();
@@ -976,6 +1052,8 @@ export function createViewer(container: HTMLElement): Viewer {
       pose();
       if (!keepCamera) frameModel();
     },
+
+    setArmour(next) { armourItems = next; applyArmour(); },
 
     setClip(next) {
       clip = next;
